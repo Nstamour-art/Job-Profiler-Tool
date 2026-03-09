@@ -1,0 +1,114 @@
+basics:
+  name: "Jane Doe"
+  email: "jane.doe@example.com"
+  phone: "555-123-4567"
+  summary: |
+    A brief professional summary that highlights your background, core strengths,
+    and what makes you a unique candidate. Mention 2-3 key areas of expertise and
+    what you are passionate about building or contributing to.
+  location:
+    city: "New York"
+    region: "NY"
+    countryCode: "US"
+  profiles:
+    - network: "LinkedIn"
+      username: "janedoe"
+      url: "https://www.linkedin.com/in/janedoe"
+    - network: "GitHub"
+      username: "janedoe"
+      url: "https://github.com/janedoe"
+
+work:
+  - name: "Acme Corporation"
+    location: "New York, USA"
+    position: "Senior Software Engineer"
+    description: "A paragraph-style description of the role and your overall contributions.
+      This gives the LLM richer context beyond the bullet highlights. Describe the
+      scope of the role, the problems you solved, the systems you worked on, and any
+      notable methods or technologies used."
+    startDate: "2022"
+    highlights:
+      - "Built and maintained a high-traffic REST API serving 10M+ requests per day."
+      - "Led migration of legacy monolith to microservices, reducing deployment time by 40%."
+      - "Mentored 3 junior engineers through code reviews and weekly 1:1s."
+
+  - name: "Startup Inc."
+    location: "Remote"
+    position: "Software Engineer"
+    description: "Another paragraph-style description for this role. Include the context
+      of the company, what the team was working on, and your specific contributions.
+      The more detail here, the better the LLM can tailor bullets to a job description."
+    startDate: "2020"
+    endDate: "2022"
+    highlights:
+      - "Developed a real-time data pipeline using Python and Kafka to process event streams."
+      - "Designed and shipped a customer-facing dashboard in React, improving user retention."
+      - "Reduced cloud infrastructure costs by 25% by optimizing database queries and caching."
+
+  - name: "Freelance"
+    location: "Remote"
+    position: "Web Developer"
+    description: "Short description of freelance work, clients served, and types of projects."
+    startDate: "2018"
+    endDate: "2020"
+    highlights:
+      - "Delivered custom WordPress and Shopify sites for 10+ small business clients."
+      - "Automated client reporting with Python scripts, saving 5 hours of manual work per week."
+
+education:
+  - institution: "State University"
+    area: "Computer Science"
+    studyType: "BSc"
+    degree: "Bachelor of Science"
+    description: "Optional description of academic activities, clubs, notable projects,
+      or awards during your studies."
+    startDate: "2014"
+    endDate: "2018"
+
+certificates:
+  - name: "AWS Certified Solutions Architect"
+    issuer: "Amazon Web Services"
+  - name: "Google Professional Data Engineer"
+    issuer: "Google Cloud"
+  - name: "Python for Data Science"
+    issuer: "Coursera"
+
+skills:
+  - name: "Programming Languages"
+    keywords:
+      - "Python"
+      - "JavaScript"
+      - "TypeScript"
+      - "SQL"
+  - name: "Frameworks & Libraries"
+    keywords:
+      - "FastAPI"
+      - "React"
+      - "Node.js"
+      - "Pandas"
+  - name: "DevOps & Cloud"
+    keywords:
+      - "Docker"
+      - "Kubernetes"
+      - "AWS"
+      - "GitHub Actions"
+  - name: "Soft Skills"
+    keywords:
+      - "Technical Communication"
+      - "Cross-Functional Collaboration"
+      - "Problem Solving"
+      - "Mentorship"
+
+projects:
+  - name: "Open Source CLI Tool"
+    description: "Python CLI for automating repetitive developer tasks"
+    url: "https://github.com/janedoe/cli-tool"
+    highlights:
+      - "Built a plug-in architecture allowing community contributors to add new commands."
+      - "Reached 500+ GitHub stars within 3 months of release."
+
+  - name: "Personal Finance Dashboard"
+    description: "Data visualization app for personal budgeting"
+    highlights:
+      - "Pulled transaction data from bank APIs and visualized spending trends with Matplotlib."
+      - "Deployed as a Streamlit web app accessible from any device."

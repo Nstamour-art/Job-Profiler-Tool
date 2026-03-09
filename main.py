@@ -1,0 +1,196 @@
+"""
+Job Profiler Tool — CLI entry point.
+
+Usage:
+  uv run python main.py list                     # list all jobs from Google Sheet
+  uv run python main.py run --row 2              # process row 2
+  uv run python main.py run --all                # process all rows with no status
+  uv run python main.py run --url <linkedin_url> # ad-hoc, skip sheet
+"""
+
+import os
+import re
+import sys
+from datetime import date
+from pathlib import Path
+
+import click
+import yaml
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+# ---------------------------------------------------------------------------
+# Config / resume loaders
+# ---------------------------------------------------------------------------
+
+def load_config(config_path: str = "config.yaml") -> dict:
+    with open(config_path, encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def load_resume(resume_path: str) -> dict:
+    with open(resume_path, encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+def _safe_name(text: str) -> str:
+    """Slugify a string for use in a directory name."""
+    return re.sub(r"[^\w\-]", "_", text).strip("_")[:40]
+
+
+# ---------------------------------------------------------------------------
+# Core pipeline
+# ---------------------------------------------------------------------------
+
+def process_job(job: dict, config: dict, resume: dict) -> str:
+    """
+    Full pipeline for one job:
+      scrape → LLM resume → LLM cover letter → write docx files
+    Returns the output directory path.
+    """
+    from src.scraper import scrape_job, ScraperError
+    from src.llm import generate_resume, generate_cover_letter
+    from src.document import build_resume, build_cover_letter
+
+    url = job.get("url", "")
+    if not url:
+        raise ValueError("Job has no URL.")
+
+    # 1. Scrape
+    click.echo(f"  Scraping {url} …")
+    try:
+        scraped = scrape_job(url)
+    except ScraperError as e:
+        raise click.ClickException(str(e))
+
+    job_data = {**job, **scraped}  # merge sheet row with scraped data
+    company = scraped.get("company") or job.get("job_title", "Unknown")
+    title   = scraped.get("title") or job.get("job_title", "Role")
+
+    # 2. LLM — resume
+    click.echo("  Generating tailored resume …")
+    resume_json = generate_resume(job_data, resume, config)
+
+    # 3. LLM — cover letter
+    click.echo("  Generating cover letter …")
+    cover_json = generate_cover_letter(job_data, resume, resume_json, config)
+
+    # 4. Build output directory
+    today_str = date.today().isoformat()
+    folder = Path(config["paths"]["output_dir"]) / f"{_safe_name(company)}_{_safe_name(title)}_{today_str}"
+    folder.mkdir(parents=True, exist_ok=True)
+
+    resume_path = str(folder / "resume.docx")
+    cover_path  = str(folder / "cover_letter.docx")
+
+    # 5. Build documents
+    click.echo("  Building resume.docx …")
+    build_resume(
+        resume_json=resume_json,
+        personal=resume["basics"],
+        education=resume.get("education", []),
+        output_path=resume_path,
+    )
+
+    click.echo("  Building cover_letter.docx …")
+    build_cover_letter(
+        cover_json=cover_json,
+        personal=resume["basics"],
+        company=company,
+        job_title=title,
+        output_path=cover_path,
+    )
+
+    return str(folder)
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+@click.group()
+def cli():
+    """Job Profiler Tool — auto-tailor resumes and cover letters."""
+
+
+@cli.command("list")
+@click.option("--config", "config_path", default="config.yaml", show_default=True)
+def list_jobs(config_path):
+    """List all jobs from the Google Sheet."""
+    from src.sheets import get_jobs
+    config = load_config(config_path)
+    try:
+        jobs = get_jobs(config)
+    except Exception as e:
+        raise click.ClickException(f"Could not read Google Sheet: {e}")
+
+    if not jobs:
+        click.echo("No jobs found in the sheet.")
+        return
+
+    click.echo(f"\n{'Row':<5} {'Status':<12} {'Job Title':<30} {'URL'}")
+    click.echo("-" * 80)
+    for j in jobs:
+        click.echo(f"{j['row']:<5} {j['status']:<12} {j['job_title'][:28]:<30} {j['url'][:50]}")
+
+
+@cli.command("run")
+@click.option("--row", "row_num", type=int, default=None,
+              help="Process a specific sheet row number.")
+@click.option("--all", "run_all", is_flag=True, default=False,
+              help="Process all rows where Status is blank.")
+@click.option("--url", "direct_url", default=None,
+              help="Process a single LinkedIn URL directly (skips sheet).")
+@click.option("--config", "config_path", default="config.yaml", show_default=True)
+@click.option("--update-status", is_flag=True, default=False,
+              help="Write 'Done' back to the sheet Status column after processing.")
+def run_jobs(row_num, run_all, direct_url, config_path, update_status):
+    """Scrape, tailor, and generate resume + cover letter documents."""
+    config  = load_config(config_path)
+    resume  = load_resume(config["paths"]["resume_yaml"])
+
+    # --- Ad-hoc URL mode ---
+    if direct_url:
+        job = {"url": direct_url, "job_title": "", "status": "", "details": "", "row": None}
+        click.echo(f"\nProcessing: {direct_url}")
+        folder = process_job(job, config, resume)
+        click.echo(click.style(f"\n  Saved to: {folder}", fg="green"))
+        return
+
+    # --- Sheet modes ---
+    from src.sheets import get_jobs, update_status as write_status
+    try:
+        all_jobs = get_jobs(config)
+    except Exception as e:
+        raise click.ClickException(f"Could not read Google Sheet: {e}")
+
+    if row_num is not None:
+        jobs_to_run = [j for j in all_jobs if j["row"] == row_num]
+        if not jobs_to_run:
+            raise click.ClickException(f"Row {row_num} not found in sheet.")
+    elif run_all:
+        jobs_to_run = [j for j in all_jobs if not j["status"].strip()]
+    else:
+        raise click.UsageError("Provide --row N, --all, or --url <url>.")
+
+    if not jobs_to_run:
+        click.echo("No matching jobs to process.")
+        return
+
+    for job in jobs_to_run:
+        label = job.get("job_title") or job.get("url", "")
+        click.echo(f"\nProcessing row {job['row']}: {label}")
+        try:
+            folder = process_job(job, config, resume)
+            click.echo(click.style(f"  Saved to: {folder}", fg="green"))
+            if update_status:
+                write_status(config, job["row"], "Done")
+                click.echo("  Status updated to 'Done'.")
+        except Exception as e:
+            click.echo(click.style(f"  ERROR: {e}", fg="red"), err=True)
+
+
+if __name__ == "__main__":
+    cli()

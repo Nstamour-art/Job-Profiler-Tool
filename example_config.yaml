@@ -1,0 +1,18 @@
+google_sheets:
+  spreadsheet_id: "your_google_spreadsheet_id_here"
+  worksheet_name: "Sheet1"
+  columns:
+    job_title: "Job Title"
+    url: "URL"
+    status: "Status"
+    details: "Details"
+
+ollama:
+  host: "https://ollama.com"
+  model: "gpt-oss:120b"
+  temperature: 0.3
+
+paths:
+  resume_yaml: "resume.yaml"
+  output_dir: "output"
+  credentials: "credentials/google_service_account.json"
