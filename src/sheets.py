@@ -35,10 +35,30 @@ def get_jobs(config: dict) -> list[dict]:
     return jobs
 
 
-def update_status(config: dict, row: int, status: str) -> None:
-    """Write a status value back to the sheet for the given row number."""
+def update_row(config: dict, row: int, **fields) -> None:
+    """Write multiple column values for a row in a single sheet request.
+
+    Keyword arguments must match keys in config.google_sheets.columns, e.g.:
+        update_row(config, 3, status="Generated", priority=8, details="...")
+    """
     sheet = _open_sheet(config)
     cols = config["google_sheets"]["columns"]
     headers = sheet.row_values(1)
-    col_index = headers.index(cols["status"]) + 1  # gspread is 1-indexed
-    sheet.update_cell(row, col_index, status)
+    updates = []
+    for field, value in fields.items():
+        col_name = cols.get(field)
+        if not col_name:
+            continue
+        try:
+            col_index = headers.index(col_name) + 1
+        except ValueError:
+            continue
+        cell = gspread.utils.rowcol_to_a1(row, col_index)
+        updates.append({"range": cell, "values": [[value]]})
+    if updates:
+        sheet.batch_update(updates)
+
+
+def update_status(config: dict, row: int, status: str) -> None:
+    """Convenience wrapper — write only the status column."""
+    update_row(config, row, status=status)

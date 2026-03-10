@@ -4,7 +4,7 @@ import yaml
 from pydantic import ValidationError
 
 from ollama import Client
-from src.models import ResumeJSON, CoverLetterJSON
+from src.models import ResumeJSON, CoverLetterJSON, SuitabilityJSON
 
 
 RESUME_SYSTEM_PROMPT = """\
@@ -24,6 +24,7 @@ STRICT RULES — YOU MUST FOLLOW ALL OF THESE:
    - You MAY infer umbrella/category terms from specific tools listed
      (e.g. "Maya + Blender" → "3D Animation", "Claude Code + GitHub Copilot" → "Vibe Coding / AI-Assisted Development")
    - You MAY NOT claim proficiency in tools or technologies not mentioned or clearly implied
+   - Can add "(Actively Learning)" or "(Rapidly Upskilling)" as needed to skills that are mentioned in the role, but not listed in the candidate's resume if these skills are relevant and the candidate has demonstrated some related experience or aptitude.
 
 4. EXPERIENCE REWRITING — be aggressive and strategic:
    - Rewrite bullets to directly mirror the language, keywords, and priorities of the job description
@@ -68,13 +69,15 @@ Rules:
 - Highlight the most relevant experience and skills from the resume
 - Keep it professional but personable — not generic
 - opening: a strong hook paragraph that names the role and leads with a compelling reason to hire
-- body_paragraphs: 1-3 paragraphs that connect the candidate's background to the job requirements
+- body_paragraphs: 1-3 paragraphs that connect the candidate's background to the job requirements; If the role is not a perfect match to the candidate's experience, use this space to proactively address potential concerns and reframe the candidate's unique strengths as assets for this role.
 - highlights: 2-5 bullet points that call out specific achievements or skills if they add emphasis;
   use an empty list [] if bullets aren't needed
 - closing: a confident call-to-action paragraph
 - Cover letters can be more than one page — write as much as needed to make a strong case
 - Do NOT fabricate anything not in the provided resume about the candidate's background, experience, or skills. You have creative license to reframe and connect the dots, but you MUST NOT invent new facts.
 - Do not hallucinate specific accomplishments, metrics, projects, or skills that aren't in the resume data. You can reframe and emphasize what's there, but you can't add new details.
+- The goal is to make the strongest possible case for this candidate for THIS specific job. Be strategic and thoughtful about how to position their background in the best light for this role, but do NOT fabricate any details. Use only what's provided, but feel free to reframe and connect the dots in a way that tells a compelling story tailored to this job description.
+- The cover letter should feel natural and human-written, avoiding generic or formulaic language.
 
 You MUST respond with valid JSON only — no markdown, no explanation. The JSON must match this schema exactly:
 {
@@ -134,6 +137,40 @@ CANDIDATE RESUME DATA (YAML):
     except (ValidationError, json.JSONDecodeError) as e:
         raise ValueError(
             f"LLM returned invalid JSON for resume. Raw output:\n{raw}\n\nError: {e}"
+        ) from e
+
+
+def generate_suitability(job: dict, resume: dict, config: dict) -> SuitabilityJSON:
+    """Rate how well the candidate matches the job on a 1-10 scale."""
+    ollama_cfg = config["ollama"]
+    user_prompt = f"""JOB TITLE: {job.get('title', job.get('job_title', ''))}
+COMPANY: {job.get('company', '')}
+
+JOB DESCRIPTION:
+{job['description']}
+
+---
+
+CANDIDATE RESUME DATA (YAML):
+{yaml.dump(resume, allow_unicode=True)}
+
+Rate how well this candidate matches this specific job posting.
+Consider: required skills overlap, seniority level, domain experience, and role type fit.
+A 10 means near-perfect match. A 1 means almost no relevant overlap.
+Be honest and calibrated — most roles should score between 4 and 8.
+
+You MUST respond with valid JSON only — no markdown, no explanation. The JSON must match this schema exactly:
+{{
+  "rating": <integer 1-10>,
+  "reasoning": "<one concise sentence explaining the score>"
+}}
+"""
+    raw = _call_ollama(ollama_cfg, "", user_prompt)
+    try:
+        return SuitabilityJSON.model_validate_json(raw)
+    except (ValidationError, json.JSONDecodeError) as e:
+        raise ValueError(
+            f"LLM returned invalid JSON for suitability. Raw output:\n{raw}\n\nError: {e}"
         ) from e
 
 

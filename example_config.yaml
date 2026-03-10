@@ -6,6 +6,7 @@ google_sheets:
     url: "URL"
     status: "Status"
     details: "Details"
+    priority: "Priority"
 
 ollama:
   host: "https://ollama.com"

@@ -60,11 +60,12 @@ def _safe_name(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 def process_job(job: dict, config: dict, resume: dict,
-                resume_only: bool = False, cover_only: bool = False) -> str:
+                resume_only: bool = False, cover_only: bool = False) -> tuple[str, dict]:
     """
     Full pipeline for one job:
-      scrape → LLM resume → LLM cover letter → write docx files
-    Returns the output directory path.
+      scrape (or use cached details) → LLM resume → LLM cover letter → write docx files
+    Returns (output_directory_path, job_data) where job_data contains description,
+    company, title, and _scraped_fresh (True if we just scraped, False if details were cached).
     """
     from src.scraper import scrape_job, ScraperError
     from src.llm import generate_resume, generate_cover_letter
@@ -74,16 +75,24 @@ def process_job(job: dict, config: dict, resume: dict,
     if not url:
         raise ValueError("Job has no URL.")
 
-    # 1. Scrape
-    click.echo(f"  Scraping {url} …")
-    try:
-        scraped = scrape_job(url)
-    except ScraperError as e:
-        raise click.ClickException(str(e))
+    # 1. Use cached description from Details column if available, otherwise scrape
+    cached_description = job.get("details", "").strip()
+    if cached_description:
+        click.echo("  Using cached job description from sheet.")
+        job_data = {**job, "description": cached_description}
+        scraped_fresh = False
+    else:
+        click.echo(f"  Scraping {url} …")
+        try:
+            scraped = scrape_job(url)
+        except ScraperError as e:
+            raise click.ClickException(str(e))
+        job_data = {**job, **scraped}
+        scraped_fresh = True
 
-    job_data = {**job, **scraped}  # merge sheet row with scraped data
-    company = scraped.get("company") or job.get("job_title", "Unknown")
-    title   = scraped.get("title") or job.get("job_title", "Role")
+    job_data["_scraped_fresh"] = scraped_fresh
+    company = job_data.get("company") or job.get("job_title", "Unknown")
+    title   = job_data.get("title") or job.get("job_title", "Role")
 
     # 2. LLM — resume (needed for cover letter context too)
     resume_json = None
@@ -129,7 +138,7 @@ def process_job(job: dict, config: dict, resume: dict,
             output_path=cover_path,
         )
 
-    return str(folder)
+    return str(folder), job_data
 
 
 # ---------------------------------------------------------------------------
@@ -173,8 +182,10 @@ def list_jobs(config_path):
               help="Generate only the resume (skip cover letter).")
 @click.option("--cover-only", is_flag=True, default=False,
               help="Generate only the cover letter (skip resume).")
+@click.option("--force", is_flag=True, default=False,
+              help="Reprocess rows even if Status is already set.")
 @click.option("--config", "config_path", default="config.yaml", show_default=True)
-def run_jobs(row_num, run_all, direct_url, resume_only, cover_only, config_path):
+def run_jobs(row_num, run_all, direct_url, resume_only, cover_only, force, config_path):
     """Scrape, tailor, and generate resume + cover letter documents."""
     if resume_only and cover_only:
         raise click.UsageError("Cannot use --resume-only and --cover-only together.")
@@ -186,12 +197,13 @@ def run_jobs(row_num, run_all, direct_url, resume_only, cover_only, config_path)
     if direct_url:
         job = {"url": direct_url, "job_title": "", "status": "", "details": "", "row": None}
         click.echo(f"\nProcessing: {direct_url}")
-        folder = process_job(job, config, resume, resume_only=resume_only, cover_only=cover_only)
+        folder, _ = process_job(job, config, resume, resume_only=resume_only, cover_only=cover_only)
         click.echo(click.style(f"\n  Saved to: {folder}", fg="green"))
         return
 
     # --- Sheet modes ---
-    from src.sheets import get_jobs, update_status as write_status
+    from src.sheets import get_jobs, update_row
+    from src.llm import generate_suitability
     try:
         all_jobs = get_jobs(config)
     except Exception as e:
@@ -201,11 +213,14 @@ def run_jobs(row_num, run_all, direct_url, resume_only, cover_only, config_path)
         jobs_to_run = [j for j in all_jobs if j["row"] == row_num]
         if not jobs_to_run:
             raise click.ClickException(f"Row {row_num} not found in sheet.")
-        if jobs_to_run[0]["status"].strip():
-            click.echo(click.style(f"  Row {row_num} already has status '{jobs_to_run[0]['status']}'. Clear the status to reprocess.", fg="yellow"))
+        if jobs_to_run[0]["status"].strip() and not force:
+            click.echo(click.style(
+                f"  Row {row_num} already has status '{jobs_to_run[0]['status']}'. "
+                "Use --force to reprocess.", fg="yellow"
+            ))
             return
     elif run_all:
-        jobs_to_run = [j for j in all_jobs if not j["status"].strip()]
+        jobs_to_run = [j for j in all_jobs if not j["status"].strip() or force]
     else:
         raise click.UsageError("Provide --row N, --all, or --url <url>.")
 
@@ -217,10 +232,26 @@ def run_jobs(row_num, run_all, direct_url, resume_only, cover_only, config_path)
         label = job.get("job_title") or job.get("url", "")
         click.echo(f"\nProcessing row {job['row']}: {label}")
         try:
-            folder = process_job(job, config, resume, resume_only=resume_only, cover_only=cover_only)
+            folder, job_data = process_job(job, config, resume, resume_only=resume_only, cover_only=cover_only)
             click.echo(click.style(f"  Saved to: {folder}", fg="green"))
-            write_status(config, job["row"], "Generated")
-            click.echo("  Status updated to 'Generated'.")
+
+            # Rate suitability
+            click.echo("  Rating suitability …")
+            try:
+                suitability = generate_suitability(job_data, resume, config)
+                click.echo(f"  Suitability: {suitability.rating}/10 — {suitability.reasoning}")
+            except Exception as e:
+                suitability = None
+                click.echo(click.style(f"  Suitability rating failed: {e}", fg="yellow"))
+
+            # Write details, priority, and status back to sheet in one request
+            updates = {"status": "Generated"}
+            if job_data.get("_scraped_fresh") and job_data.get("description"):
+                updates["details"] = job_data["description"]
+            if suitability is not None:
+                updates["priority"] = suitability.rating
+            update_row(config, job["row"], **updates)
+            click.echo("  Sheet updated.")
         except Exception as e:
             click.echo(click.style(f"  ERROR: {e}", fg="red"), err=True)
 
