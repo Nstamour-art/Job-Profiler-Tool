@@ -18,6 +18,7 @@ STRICT RULES — YOU MUST FOLLOW ALL OF THESE:
    - New job titles, companies, dates, or responsibilities
    - Projects, metrics, or accomplishments not in the source data
    - Education or credentials not provided
+   - Skills or tools not listed (unless you can infer a category as per rule #3)
 
 3. SKILLS — limited creative license:
    - You MAY infer umbrella/category terms from specific tools listed
@@ -43,6 +44,8 @@ STRICT RULES — YOU MUST FOLLOW ALL OF THESE:
 8. The projects section heading is dynamic — rename it to best fit the role
    (e.g. "AI Prototyping & Agent Design", "Creative Projects", "Selected Projects").
 
+NEVER USE em-dashes or other special characters that might break JSON formatting. Use plain text only.
+
 You MUST respond with valid JSON only — no markdown, no explanation. The JSON must match this schema exactly:
 {
   "summary": "string",
@@ -58,6 +61,9 @@ COVER_LETTER_SYSTEM_PROMPT = """\
 You are an expert cover letter writer. Write a compelling cover letter tailored to the job.
 
 Rules:
+- Do not fabricate any information not explicitly present in the resume data or job description, but you have creative license to reframe and connect the dots in a way that best positions the candidate for this specific role.
+- Do not use em-dashes or other special characters that might break JSON formatting. Use plain text only.
+- Avoid clichés and generic statements that could apply to any job or candidate. The letter should feel like it was written specifically for this role and company.
 - Be specific to this role and company — reference the job description directly
 - Highlight the most relevant experience and skills from the resume
 - Keep it professional but personable — not generic
@@ -67,7 +73,8 @@ Rules:
   use an empty list [] if bullets aren't needed
 - closing: a confident call-to-action paragraph
 - Cover letters can be more than one page — write as much as needed to make a strong case
-- Do NOT fabricate anything not in the provided resume or job description
+- Do NOT fabricate anything not in the provided resume about the candidate's background, experience, or skills. You have creative license to reframe and connect the dots, but you MUST NOT invent new facts.
+- Do not hallucinate specific accomplishments, metrics, projects, or skills that aren't in the resume data. You can reframe and emphasize what's there, but you can't add new details.
 
 You MUST respond with valid JSON only — no markdown, no explanation. The JSON must match this schema exactly:
 {

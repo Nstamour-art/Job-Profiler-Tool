@@ -62,9 +62,10 @@ Restart your terminal after installing.
 git clone https://github.com/nstamour-art/Job-Profiler-Tool.git
 cd Job-Profiler-Tool
 uv sync
+uv run playwright install chromium
 ```
 
-### 2. Set up environment variables
+### 3. Set up environment variables
 
 ```bash
 cp .env.example .env
@@ -76,7 +77,7 @@ Edit `.env` and add your Ollama Cloud API key:
 OLLAMA_API_KEY=your_ollama_api_key_here
 ```
 
-### 3. Fill out your resume
+### 4. Fill out your resume
 
 ```bash
 cp example_resume.yaml resume.yaml
@@ -95,7 +96,7 @@ Edit `resume.yaml` with your information. The key sections are:
 
 > **Tip:** Keep `resume.yaml` as a complete master list. The LLM selects, reorders, and rewrites content to best match each specific job posting. The `description` field on each work entry gives the LLM richer context to draw from — write it like a paragraph summary of your role.
 
-### 4. Configure the tool
+### 5. Configure the tool
 
 ```bash
 cp example_config.yaml config.yaml
@@ -182,3 +183,21 @@ output/
     resume.docx
     cover_letter.docx
 ```
+
+---
+
+## Disclaimer
+
+This tool is intended for **personal use only**. The web scraping feature is provided as a convenience for individuals automating their own job search.
+
+- Users are solely responsible for complying with the Terms of Service of any website they scrape, including LinkedIn.
+- This tool does not store, transmit, or redistribute any data obtained from third-party websites.
+- The author makes no representations about the legality of scraping any particular website in any jurisdiction.
+
+Use at your own discretion.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).

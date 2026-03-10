@@ -35,6 +35,21 @@ def load_resume(resume_path: str) -> dict:
         return yaml.safe_load(f)
 
 
+def _unique_path(path: Path) -> Path:
+    """Return path with ' (1)', ' (2)', … suffix if it already exists."""
+    if not path.exists():
+        return path
+    stem = path.stem
+    suffix = path.suffix
+    parent = path.parent
+    counter = 1
+    while True:
+        candidate = parent / f"{stem} ({counter}){suffix}"
+        if not candidate.exists():
+            return candidate
+        counter += 1
+
+
 def _safe_name(text: str) -> str:
     """Slugify a string for use in a directory name."""
     return re.sub(r"[^\w\-]", "_", text).strip("_")[:40]
@@ -44,7 +59,8 @@ def _safe_name(text: str) -> str:
 # Core pipeline
 # ---------------------------------------------------------------------------
 
-def process_job(job: dict, config: dict, resume: dict) -> str:
+def process_job(job: dict, config: dict, resume: dict,
+                resume_only: bool = False, cover_only: bool = False) -> str:
     """
     Full pipeline for one job:
       scrape → LLM resume → LLM cover letter → write docx files
@@ -69,39 +85,49 @@ def process_job(job: dict, config: dict, resume: dict) -> str:
     company = scraped.get("company") or job.get("job_title", "Unknown")
     title   = scraped.get("title") or job.get("job_title", "Role")
 
-    # 2. LLM — resume
-    click.echo("  Generating tailored resume …")
-    resume_json = generate_resume(job_data, resume, config)
+    # 2. LLM — resume (needed for cover letter context too)
+    resume_json = None
+    if not cover_only:
+        click.echo("  Generating tailored resume …")
+        resume_json = generate_resume(job_data, resume, config)
 
     # 3. LLM — cover letter
-    click.echo("  Generating cover letter …")
-    cover_json = generate_cover_letter(job_data, resume, resume_json, config)
+    cover_json = None
+    if not resume_only:
+        if resume_json is None:
+            click.echo("  Generating resume context for cover letter …")
+            resume_json = generate_resume(job_data, resume, config)
+        click.echo("  Generating cover letter …")
+        cover_json = generate_cover_letter(job_data, resume, resume_json, config)
 
     # 4. Build output directory
     today_str = date.today().isoformat()
     folder = Path(config["paths"]["output_dir"]) / f"{_safe_name(company)}_{_safe_name(title)}_{today_str}"
     folder.mkdir(parents=True, exist_ok=True)
 
-    resume_path = str(folder / "resume.docx")
-    cover_path  = str(folder / "cover_letter.docx")
+    candidate_name = resume["basics"]["name"]
 
     # 5. Build documents
-    click.echo("  Building resume.docx …")
-    build_resume(
-        resume_json=resume_json,
-        personal=resume["basics"],
-        education=resume.get("education", []),
-        output_path=resume_path,
-    )
+    if not cover_only:
+        resume_path = str(_unique_path(folder / f"{candidate_name} - {title} - Resume.docx"))
+        click.echo("  Building resume.docx …")
+        build_resume(
+            resume_json=resume_json,
+            personal=resume["basics"],
+            education=resume.get("education", []),
+            output_path=resume_path,
+        )
 
-    click.echo("  Building cover_letter.docx …")
-    build_cover_letter(
-        cover_json=cover_json,
-        personal=resume["basics"],
-        company=company,
-        job_title=title,
-        output_path=cover_path,
-    )
+    if not resume_only:
+        cover_path = str(_unique_path(folder / f"{candidate_name} - {title} - Cover Letter.docx"))
+        click.echo("  Building cover_letter.docx …")
+        build_cover_letter(
+            cover_json=cover_json,
+            personal=resume["basics"],
+            company=company,
+            job_title=title,
+            output_path=cover_path,
+        )
 
     return str(folder)
 
@@ -143,9 +169,16 @@ def list_jobs(config_path):
               help="Process all rows where Status is blank.")
 @click.option("--url", "direct_url", default=None,
               help="Process a single LinkedIn URL directly (skips sheet).")
+@click.option("--resume-only", is_flag=True, default=False,
+              help="Generate only the resume (skip cover letter).")
+@click.option("--cover-only", is_flag=True, default=False,
+              help="Generate only the cover letter (skip resume).")
 @click.option("--config", "config_path", default="config.yaml", show_default=True)
-def run_jobs(row_num, run_all, direct_url, config_path):
+def run_jobs(row_num, run_all, direct_url, resume_only, cover_only, config_path):
     """Scrape, tailor, and generate resume + cover letter documents."""
+    if resume_only and cover_only:
+        raise click.UsageError("Cannot use --resume-only and --cover-only together.")
+
     config  = load_config(config_path)
     resume  = load_resume(config["paths"]["resume_yaml"])
 
@@ -153,7 +186,7 @@ def run_jobs(row_num, run_all, direct_url, config_path):
     if direct_url:
         job = {"url": direct_url, "job_title": "", "status": "", "details": "", "row": None}
         click.echo(f"\nProcessing: {direct_url}")
-        folder = process_job(job, config, resume)
+        folder = process_job(job, config, resume, resume_only=resume_only, cover_only=cover_only)
         click.echo(click.style(f"\n  Saved to: {folder}", fg="green"))
         return
 
@@ -184,7 +217,7 @@ def run_jobs(row_num, run_all, direct_url, config_path):
         label = job.get("job_title") or job.get("url", "")
         click.echo(f"\nProcessing row {job['row']}: {label}")
         try:
-            folder = process_job(job, config, resume)
+            folder = process_job(job, config, resume, resume_only=resume_only, cover_only=cover_only)
             click.echo(click.style(f"  Saved to: {folder}", fg="green"))
             write_status(config, job["row"], "Generated")
             click.echo("  Status updated to 'Generated'.")

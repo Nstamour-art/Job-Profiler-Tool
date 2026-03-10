@@ -51,13 +51,13 @@ def _set_font(run, size_pt: int, bold: bool = False, italic: bool = False,
         run.font.color.rgb = color
 
 
-def _add_right_tab(paragraph):
+def _add_right_tab(paragraph, pos_twips: int = None):
     """Add a right-aligned tab stop at the right margin."""
     pPr = paragraph._p.get_or_add_pPr()
     tabs = OxmlElement("w:tabs")
     tab = OxmlElement("w:tab")
     tab.set(qn("w:val"), "right")
-    tab.set(qn("w:pos"), str(RIGHT_TAB_POS))
+    tab.set(qn("w:pos"), str(pos_twips or RIGHT_TAB_POS))
     tabs.append(tab)
     pPr.append(tabs)
 
@@ -86,27 +86,50 @@ def _no_border_cell(cell):
     tcPr.append(tcBorders)
 
 
+def _cell_bullet(cell, text: str):
+    """Add a bullet-style paragraph inside a table cell."""
+    p = cell.add_paragraph()
+    _set_space(p, before_pt=1, after_pt=1)
+    # Hanging indent to mimic bullet style
+    pPr = p._p.get_or_add_pPr()
+    ind = OxmlElement("w:ind")
+    ind.set(qn("w:left"), "360")   # 0.25"
+    ind.set(qn("w:hanging"), "360")
+    pPr.append(ind)
+    # Bullet character + text
+    bullet_run = p.add_run("\u2022\t")
+    _set_font(bullet_run, BODY_PT)
+    text_run = p.add_run(text)
+    _set_font(text_run, BODY_PT)
+    return p
+
+
 def _section_heading(doc: Document, text: str):
     p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _set_space(p, before_pt=8, after_pt=2)
     run = p.add_run(text.upper())
     _set_font(run, HEADING_PT, bold=True)
-    # Thin bottom border under heading
+    # Thin top border above heading
     pPr = p._p.get_or_add_pPr()
     pBdr = OxmlElement("w:pBdr")
-    bottom = OxmlElement("w:bottom")
-    bottom.set(qn("w:val"), "single")
-    bottom.set(qn("w:sz"), "4")
-    bottom.set(qn("w:space"), "1")
-    bottom.set(qn("w:color"), "000000")
-    pBdr.append(bottom)
+    top = OxmlElement("w:top")
+    top.set(qn("w:val"), "single")
+    top.set(qn("w:sz"), "4")
+    top.set(qn("w:space"), "1")
+    top.set(qn("w:color"), "000000")
+    pBdr.append(top)
     pPr.append(pBdr)
+    # Keep heading on the same page as the following content
+    keepNext = OxmlElement("w:keepNext")
+    pPr.append(keepNext)
     return p
 
 
 def _body_paragraph(doc: Document, text: str, italic: bool = False,
                     before_pt: float = 0, after_pt: float = 2) -> object:
     p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     _set_space(p, before_pt=before_pt, after_pt=after_pt)
     run = p.add_run(text)
     _set_font(run, BODY_PT, italic=italic)
@@ -124,11 +147,15 @@ def _bullet(doc: Document, text: str):
     return p
 
 
-def _company_line(doc: Document, company: str, location: str, dates: str):
+def _company_line(doc: Document, company: str, location: str, dates: str,
+                  right_tab_twips: int = None):
     """Company + location LEFT, dates RIGHT using a tab stop."""
     p = doc.add_paragraph()
     _set_space(p, before_pt=6, after_pt=0)
-    _add_right_tab(p)
+    if right_tab_twips:
+        _add_right_tab(p, right_tab_twips)
+    else:
+        _add_right_tab(p)
     left_text = f"{company}  |  {location}" if location else company
     run_left = p.add_run(left_text)
     _set_font(run_left, BODY_PT, bold=True)
@@ -155,6 +182,11 @@ def build_resume(resume_json: ResumeJSON, personal: dict, education: list,
         section.bottom_margin = Inches(0.6)
         section.left_margin = Inches(0.75)
         section.right_margin = Inches(0.75)
+
+    # Compute right-tab position from actual page geometry (EMU → twips)
+    sec = doc.sections[0]
+    text_width_emu = sec.page_width - sec.left_margin - sec.right_margin
+    right_tab = int(text_width_emu / 635)  # 1 twip = 635 EMU
 
     # --- Header ---
     name_p = doc.add_paragraph()
@@ -188,7 +220,7 @@ def build_resume(resume_json: ResumeJSON, personal: dict, education: list,
     # --- Professional Experience ---
     _section_heading(doc, "Professional Experience")
     for exp in resume_json.experience:
-        _company_line(doc, exp.company, "", exp.dates)
+        _company_line(doc, exp.company, "", exp.dates, right_tab_twips=right_tab)
         _body_paragraph(doc, exp.role, italic=True, before_pt=1, after_pt=1)
         for bullet in exp.bullets:
             _bullet(doc, bullet)
@@ -196,8 +228,10 @@ def build_resume(resume_json: ResumeJSON, personal: dict, education: list,
     # --- Skills ---
     _section_heading(doc, "Skills")
     for cat in resume_json.skill_categories:
-        p = doc.add_paragraph()
+        p = doc.add_paragraph(style="List Bullet")
         _set_space(p, before_pt=1, after_pt=1)
+        for run in p.runs:
+            p._p.remove(run._r)
         label_run = p.add_run(f"{cat.name}: ")
         _set_font(label_run, BODY_PT, bold=True)
         skills_run = p.add_run(", ".join(cat.skills))
@@ -223,35 +257,29 @@ def build_resume(resume_json: ResumeJSON, personal: dict, education: list,
                 url_run = url_p.add_run(proj.url)
                 _set_font(url_run, BODY_PT, italic=True)
 
-    # --- Education & Certificates (2-column table) ---
+    # --- Education & Certificates (2-column bullets) ---
     _section_heading(doc, "Education & Certificates")
     table = doc.add_table(rows=1, cols=2)
-    table.style = "Table Grid"
+    table.autofit = True
 
     left_cell = table.cell(0, 0)
     right_cell = table.cell(0, 1)
     _no_border_cell(left_cell)
     _no_border_cell(right_cell)
 
-    # Left: education (always static)
+    # Left: education
     left_cell.paragraphs[0].clear()
     for ed in education:
         degree_parts = [ed.get("studyType", ""), ed.get("area", "")]
         degree = " - ".join(p for p in degree_parts if p)
         parts = [degree, ed.get("institution", "")]
         text = " | ".join(p for p in parts if p)
-        p = left_cell.add_paragraph()
-        _set_space(p, before_pt=1, after_pt=1)
-        run = p.add_run(text)
-        _set_font(run, BODY_PT)
+        _cell_bullet(left_cell, text)
 
-    # Right: selected certifications
+    # Right: certifications
     right_cell.paragraphs[0].clear()
     for cert in resume_json.certifications:
-        p = right_cell.add_paragraph()
-        _set_space(p, before_pt=1, after_pt=1)
-        run = p.add_run(cert)
-        _set_font(run, BODY_PT)
+        _cell_bullet(right_cell, cert)
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     doc.save(output_path)
@@ -306,17 +334,25 @@ def build_cover_letter(cover_json: CoverLetterJSON, personal: dict,
     location_str = ", ".join(p for p in [loc.get("city", ""), loc.get("region", ""), loc.get("countryCode", "")] if p) if isinstance(loc, dict) else str(loc or "")
     linkedin = next((p.get("username", "") for p in personal.get("profiles", []) if p.get("network") == "LinkedIn"), "")
     github = next((p.get("username", "") for p in personal.get("profiles", []) if p.get("network") == "GitHub"), "")
-    contact_parts = [
+    line1_parts = [
         location_str,
         personal.get("phone", ""),
         personal.get("email", ""),
+    ]
+    line2_parts = [
         f"LinkedIn: {linkedin}" if linkedin else "",
         f"GitHub: {github}" if github else "",
     ]
     contact_p = doc.add_paragraph()
     _set_space(contact_p, before_pt=0, after_pt=12)
-    contact_run = contact_p.add_run(" \u2219 ".join(p for p in contact_parts if p))
-    _set_font(contact_run, COVER_PT)
+    line1 = " \u2219 ".join(p for p in line1_parts if p)
+    line2 = " \u2219 ".join(p for p in line2_parts if p)
+    run1 = contact_p.add_run(line1)
+    _set_font(run1, COVER_PT)
+    if line2:
+        run1.add_break()
+        run2 = contact_p.add_run(line2)
+        _set_font(run2, COVER_PT)
 
     # --- Date (right-aligned) ---
     today = date.today().strftime("%B %d, %Y")

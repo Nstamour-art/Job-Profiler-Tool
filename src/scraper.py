@@ -1,17 +1,5 @@
 import re
-import requests
-from bs4 import BeautifulSoup
-
-
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/122.0.0.0 Safari/537.36"
-    ),
-    "Accept-Language": "en-US,en;q=0.9",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-}
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
 
 class ScraperError(Exception):
@@ -24,22 +12,18 @@ def _clean_text(text: str) -> str:
     return text.strip()
 
 
-def _extract_text(element) -> str:
-    """Convert a BS4 element to clean plain text, preserving bullet structure."""
-    lines = []
-    for child in element.descendants:
-        if child.name == "li":
-            lines.append("• " + child.get_text(separator=" ", strip=True))
-        elif child.name in ("p", "br"):
-            lines.append("\n")
-    if not lines:
-        lines.append(element.get_text(separator="\n", strip=True))
-    return _clean_text("\n".join(lines))
+def _try_selectors(page, selectors: list[str]) -> object | None:
+    """Return the first matching element or None."""
+    for sel in selectors:
+        el = page.query_selector(sel)
+        if el:
+            return el
+    return None
 
 
 def scrape_job(url: str) -> dict:
     """
-    Scrape a LinkedIn job posting.
+    Scrape a LinkedIn job posting using a headless browser.
 
     Returns:
         {"description": str, "company": str, "title": str}
@@ -47,48 +31,70 @@ def scrape_job(url: str) -> dict:
     Raises:
         ScraperError: if the page is blocked or the description cannot be found.
     """
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=15)
-    except requests.RequestException as e:
-        raise ScraperError(f"Network error fetching {url}: {e}") from e
-
-    if resp.status_code != 200:
-        raise ScraperError(
-            f"LinkedIn returned HTTP {resp.status_code}. "
-            "The page may require login or the URL is invalid."
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            ),
+            locale="en-US",
+            viewport={"width": 1280, "height": 800},
         )
+        page = context.new_page()
 
-    soup = BeautifulSoup(resp.text, "lxml")
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        except PlaywrightTimeoutError as e:
+            browser.close()
+            raise ScraperError(f"Timed out loading {url}: {e}") from e
 
-    # Check for login redirect
-    if soup.find("input", {"name": "session_key"}):
-        raise ScraperError(
-            "LinkedIn redirected to the login page. "
-            "This job may require authentication to view."
-        )
+        # Dismiss login modal if present
+        try:
+            page.wait_for_selector(".modal__dismiss, button[aria-label='Dismiss']", timeout=4000)
+            page.keyboard.press("Escape")
+        except PlaywrightTimeoutError:
+            pass
 
-    # --- Job description ---
-    desc_el = soup.find(id="job-details")
-    if not desc_el:
-        desc_el = soup.find(class_="jobs-description-content__text--stretch")
-    if not desc_el:
-        raise ScraperError(
-            "Could not find the job description on this page. "
-            "LinkedIn may have changed its HTML structure."
-        )
-    description = _extract_text(desc_el)
+        # Wait for any description element to appear (authenticated or guest selectors)
+        desc_selectors = [
+            "#job-details",                                 # authenticated view
+            ".jobs-description-content__text--stretch",    # authenticated view
+            ".show-more-less-html__markup",                 # guest view
+            ".description__text",                          # guest view (older)
+        ]
+        try:
+            page.wait_for_selector(", ".join(desc_selectors), timeout=10000)
+        except PlaywrightTimeoutError:
+            browser.close()
+            raise ScraperError(
+                "Could not find the job description on this page. "
+                "LinkedIn may have changed its HTML structure or requires login."
+            )
 
-    # --- Company name ---
-    company = ""
-    company_el = soup.find(class_="job-details-jobs-unified-top-card__company-name")
-    if company_el:
-        a = company_el.find("a")
-        company = (a or company_el).get_text(strip=True)
+        # --- Job description ---
+        desc_el = _try_selectors(page, desc_selectors)
+        if not desc_el:
+            browser.close()
+            raise ScraperError("Could not find the job description on this page.")
+        description = _clean_text(desc_el.inner_text())
 
-    # --- Job title ---
-    title = ""
-    title_el = soup.find("h1")
-    if title_el:
-        title = title_el.get_text(strip=True)
+        # --- Company name ---
+        company_el = _try_selectors(page, [
+            ".job-details-jobs-unified-top-card__company-name",  # authenticated
+            ".topcard__org-name-link",                           # guest view
+            ".sub-nav-cta__optional-url",                        # guest view fallback
+        ])
+        company = company_el.inner_text().strip() if company_el else ""
+
+        # --- Job title ---
+        title_el = _try_selectors(page, [
+            "h1.top-card-layout__title",   # guest view
+            "h1",                          # fallback
+        ])
+        title = title_el.inner_text().strip() if title_el else ""
+
+        browser.close()
 
     return {"description": description, "company": company, "title": title}
