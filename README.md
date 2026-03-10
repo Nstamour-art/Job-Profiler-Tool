@@ -2,6 +2,8 @@
 
 Automatically tailors your resume and generates a cover letter for any job posting. Paste a LinkedIn URL, and the tool takes the job description, sends it to an LLM alongside your resume data, and outputs a ready-to-send `.docx` resume and cover letter.
 
+Also supports referencing a Google Sheet, via the Google Cloud API see [Google Sheets Setup](#google-sheets-setup-optional). 
+
 ---
 
 ## How It Works
