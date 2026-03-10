@@ -144,9 +144,7 @@ def list_jobs(config_path):
 @click.option("--url", "direct_url", default=None,
               help="Process a single LinkedIn URL directly (skips sheet).")
 @click.option("--config", "config_path", default="config.yaml", show_default=True)
-@click.option("--update-status", is_flag=True, default=False,
-              help="Write 'Done' back to the sheet Status column after processing.")
-def run_jobs(row_num, run_all, direct_url, config_path, update_status):
+def run_jobs(row_num, run_all, direct_url, config_path):
     """Scrape, tailor, and generate resume + cover letter documents."""
     config  = load_config(config_path)
     resume  = load_resume(config["paths"]["resume_yaml"])
@@ -170,6 +168,9 @@ def run_jobs(row_num, run_all, direct_url, config_path, update_status):
         jobs_to_run = [j for j in all_jobs if j["row"] == row_num]
         if not jobs_to_run:
             raise click.ClickException(f"Row {row_num} not found in sheet.")
+        if jobs_to_run[0]["status"].strip():
+            click.echo(click.style(f"  Row {row_num} already has status '{jobs_to_run[0]['status']}'. Clear the status to reprocess.", fg="yellow"))
+            return
     elif run_all:
         jobs_to_run = [j for j in all_jobs if not j["status"].strip()]
     else:
@@ -185,9 +186,8 @@ def run_jobs(row_num, run_all, direct_url, config_path, update_status):
         try:
             folder = process_job(job, config, resume)
             click.echo(click.style(f"  Saved to: {folder}", fg="green"))
-            if update_status:
-                write_status(config, job["row"], "Done")
-                click.echo("  Status updated to 'Done'.")
+            write_status(config, job["row"], "Generated")
+            click.echo("  Status updated to 'Generated'.")
         except Exception as e:
             click.echo(click.style(f"  ERROR: {e}", fg="red"), err=True)
 

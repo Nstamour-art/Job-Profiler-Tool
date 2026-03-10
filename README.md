@@ -38,7 +38,25 @@ Before running the tool, you need four files in place. Three are gitignored and 
 
 ## Getting Started
 
-### 1. Clone and install dependencies
+### 1. Install uv
+
+If you don't have `uv` installed:
+
+**macOS / Linux:**
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Restart your terminal after installing.
+
+### 2. Clone and install dependencies
 
 ```bash
 git clone https://github.com/nstamour-art/Job-Profiler-Tool.git
@@ -122,10 +140,9 @@ uv run python main.py run --row 2
 
 # Process all rows where Status is blank
 uv run python main.py run --all
-
-# Process all blank rows and mark them Done in the sheet
-uv run python main.py run --all --update-status
 ```
+
+After each successful run, the row's Status is automatically set to **Generated**. Any row with a non-blank status is skipped — clear it in the sheet to reprocess.
 
 ---
 
