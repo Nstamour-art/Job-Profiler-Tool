@@ -52,7 +52,8 @@ def _unique_path(path: Path) -> Path:
 
 def _safe_name(text: str) -> str:
     """Slugify a string for use in a directory name."""
-    return re.sub(r"[^\w\-]", "_", text).strip("_")[:40]
+    text = re.sub(r"[^\w\s\-]", "", text)   # strip punctuation
+    return re.sub(r"\s+", "_", text).strip("_")[:40]
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +116,7 @@ def process_job(job: dict, config: dict, resume: dict,
     folder.mkdir(parents=True, exist_ok=True)
 
     candidate_name = resume["basics"]["name"]
-    safe_title = re.sub(r'[\\/:*?"<>|]', "-", title).strip()
+    safe_title = re.sub(r"[^\w\s\-]", "", title).strip()
 
     # 5. Build documents
     if not cover_only:
