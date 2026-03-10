@@ -1,13 +1,15 @@
 # Job Profiler Tool
 
-Automatically tailors your resume and generates a cover letter for any job posting. Paste a LinkedIn URL, and the tool scrapes the job description, sends it to an LLM alongside your resume data, and outputs a ready-to-send `.docx` resume and cover letter.
+Automatically tailors your resume and generates a cover letter for any job posting. Paste a LinkedIn URL, and the tool takes the job description, sends it to an LLM alongside your resume data, and outputs a ready-to-send `.docx` resume and cover letter.
+
+Also supports referencing a Google Sheet, via the Google Cloud API see [Google Sheets Setup](#google-sheets-setup-optional). 
 
 ---
 
 ## How It Works
 
 1. Reads your resume from `resume.yaml`
-2. Scrapes the job description from the provided LinkedIn URL
+2. Takes the job description from the provided LinkedIn URL
 3. Sends both to an Ollama Cloud LLM to generate a tailored resume and cover letter
 4. Writes `resume.docx` and `cover_letter.docx` to a dated output folder
 
@@ -25,7 +27,7 @@ Optionally, jobs can be queued in a Google Sheet and processed in batch.
 
 ## Required Files
 
-Before running the tool, you need four files in place. Three are gitignored and must be created locally — they are never committed:
+Before running the tool, you need four files in place. Three are gitignored and must be created locally:
 
 | File | Source | Purpose |
 | --- | --- | --- |
