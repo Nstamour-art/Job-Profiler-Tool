@@ -115,10 +115,11 @@ def process_job(job: dict, config: dict, resume: dict,
     folder.mkdir(parents=True, exist_ok=True)
 
     candidate_name = resume["basics"]["name"]
+    safe_title = re.sub(r'[\\/:*?"<>|]', "-", title).strip()
 
     # 5. Build documents
     if not cover_only:
-        resume_path = str(_unique_path(folder / f"{candidate_name} - {title} - Resume.docx"))
+        resume_path = str(_unique_path(folder / f"{candidate_name} - {safe_title} - Resume.docx"))
         click.echo("  Building resume.docx …")
         build_resume(
             resume_json=resume_json,
@@ -128,7 +129,7 @@ def process_job(job: dict, config: dict, resume: dict,
         )
 
     if not resume_only:
-        cover_path = str(_unique_path(folder / f"{candidate_name} - {title} - Cover Letter.docx"))
+        cover_path = str(_unique_path(folder / f"{candidate_name} - {safe_title} - Cover Letter.docx"))
         click.echo("  Building cover_letter.docx …")
         build_cover_letter(
             cover_json=cover_json,
