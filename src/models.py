@@ -27,6 +27,8 @@ class ResumeJSON(BaseModel):
     projects_section_heading: str
     projects: list[ProjectEntry]
     certifications: list[str]
+    priority: int           # 1=apply now, 10=low priority
+    priority_reasoning: str # one concise sentence explaining the score
 
 
 class CoverLetterJSON(BaseModel):
@@ -35,8 +37,3 @@ class CoverLetterJSON(BaseModel):
     body_paragraphs: list[str]  # 1-3 body paragraphs
     highlights: list[str]       # bullet points for emphasis (empty list = omit)
     closing: str
-
-
-class SuitabilityJSON(BaseModel):
-    rating: int       # 1-10
-    reasoning: str    # one sentence explaining the score

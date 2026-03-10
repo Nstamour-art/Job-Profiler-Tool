@@ -1,10 +1,14 @@
 import json
 import os
 import yaml
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
+from typing import Type, TypeVar
 
+import json_repair
 from ollama import Client
-from src.models import ResumeJSON, CoverLetterJSON, SuitabilityJSON
+from src.models import ResumeJSON, CoverLetterJSON
+
+T = TypeVar("T", bound=BaseModel)
 
 
 RESUME_SYSTEM_PROMPT = """\
@@ -47,6 +51,11 @@ STRICT RULES — YOU MUST FOLLOW ALL OF THESE:
 
 NEVER USE em-dashes or other special characters that might break JSON formatting. Use plain text only.
 
+Also rate the application priority for this candidate against this job posting.
+Consider: required skills overlap, seniority level, domain experience, and role type fit.
+priority: 1 means apply immediately (near-perfect match), 10 means lowest priority (almost no overlap).
+Be honest and calibrated — most roles should score between 3 and 7.
+
 You MUST respond with valid JSON only — no markdown, no explanation. The JSON must match this schema exactly:
 {
   "summary": "string",
@@ -54,7 +63,9 @@ You MUST respond with valid JSON only — no markdown, no explanation. The JSON 
   "experience": [{"company": "string", "role": "string", "dates": "string", "bullets": ["string"]}],
   "projects_section_heading": "string",
   "projects": [{"title": "string", "focus": "string", "bullets": ["string"], "url": "string"}],
-  "certifications": ["string"]
+  "certifications": ["string"],
+  "priority": <integer 1-10>,
+  "priority_reasoning": "<one concise sentence explaining the score>"
 }
 """
 
@@ -117,6 +128,35 @@ def _call_ollama(ollama_cfg: dict, system: str, user: str) -> str:
     return response.message.content
 
 
+def _parse_llm_response(model_class: Type[T], raw: str) -> T:
+    """Try to parse raw LLM output; attempt json_repair if direct parse fails."""
+    try:
+        return model_class.model_validate_json(raw)
+    except (ValidationError, json.JSONDecodeError):
+        pass
+    repaired = json_repair.repair_json(raw)
+    return model_class.model_validate_json(repaired)
+
+
+def _call_with_retry(model_class: Type[T], ollama_cfg: dict, system: str, user: str) -> T:
+    """Call Ollama and parse the response, retrying the full LLM call on failure."""
+    max_retries = ollama_cfg.get("max_retries", 3)
+    last_error: Exception = RuntimeError("No attempts made.")
+    for attempt in range(1, max_retries + 1):
+        raw = _call_ollama(ollama_cfg, system, user)
+        try:
+            return _parse_llm_response(model_class, raw)
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries:
+                import click
+                click.echo(f"  JSON parse failed (attempt {attempt}/{max_retries}), retrying …")
+    raise ValueError(
+        f"LLM returned invalid JSON after {max_retries} attempts. "
+        f"Last error: {last_error}"
+    ) from last_error
+
+
 def generate_resume(job: dict, resume: dict, config: dict) -> ResumeJSON:
     """Call Ollama Cloud to produce a tailored ResumeJSON for the given job."""
     ollama_cfg = config["ollama"]
@@ -131,47 +171,7 @@ JOB DESCRIPTION:
 CANDIDATE RESUME DATA (YAML):
 {yaml.dump(resume, allow_unicode=True)}
 """
-    raw = _call_ollama(ollama_cfg, RESUME_SYSTEM_PROMPT, user_prompt)
-    try:
-        return ResumeJSON.model_validate_json(raw)
-    except (ValidationError, json.JSONDecodeError) as e:
-        raise ValueError(
-            f"LLM returned invalid JSON for resume. Raw output:\n{raw}\n\nError: {e}"
-        ) from e
-
-
-def generate_suitability(job: dict, resume: dict, config: dict) -> SuitabilityJSON:
-    """Rate how well the candidate matches the job on a 1-10 scale."""
-    ollama_cfg = config["ollama"]
-    user_prompt = f"""JOB TITLE: {job.get('title', job.get('job_title', ''))}
-COMPANY: {job.get('company', '')}
-
-JOB DESCRIPTION:
-{job['description']}
-
----
-
-CANDIDATE RESUME DATA (YAML):
-{yaml.dump(resume, allow_unicode=True)}
-
-Rate how well this candidate matches this specific job posting.
-Consider: required skills overlap, seniority level, domain experience, and role type fit.
-A 10 means near-perfect match. A 1 means almost no relevant overlap.
-Be honest and calibrated — most roles should score between 4 and 8.
-
-You MUST respond with valid JSON only — no markdown, no explanation. The JSON must match this schema exactly:
-{{
-  "rating": <integer 1-10>,
-  "reasoning": "<one concise sentence explaining the score>"
-}}
-"""
-    raw = _call_ollama(ollama_cfg, "", user_prompt)
-    try:
-        return SuitabilityJSON.model_validate_json(raw)
-    except (ValidationError, json.JSONDecodeError) as e:
-        raise ValueError(
-            f"LLM returned invalid JSON for suitability. Raw output:\n{raw}\n\nError: {e}"
-        ) from e
+    return _call_with_retry(ResumeJSON, ollama_cfg, RESUME_SYSTEM_PROMPT, user_prompt)
 
 
 def generate_cover_letter(job: dict, resume: dict,
@@ -194,10 +194,4 @@ TAILORED RESUME SUMMARY:
 TAILORED EXPERIENCE:
 {yaml.dump([e.model_dump() for e in resume_json.experience], allow_unicode=True)}
 """
-    raw = _call_ollama(ollama_cfg, COVER_LETTER_SYSTEM_PROMPT, user_prompt)
-    try:
-        return CoverLetterJSON.model_validate_json(raw)
-    except (ValidationError, json.JSONDecodeError) as e:
-        raise ValueError(
-            f"LLM returned invalid JSON for cover letter. Raw output:\n{raw}\n\nError: {e}"
-        ) from e
+    return _call_with_retry(CoverLetterJSON, ollama_cfg, COVER_LETTER_SYSTEM_PROMPT, user_prompt)

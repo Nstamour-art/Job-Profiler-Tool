@@ -1,17 +1,19 @@
 # Job Profiler Tool
 
-Automatically tailors your resume and generates a cover letter for any job posting. Paste a LinkedIn URL, and the tool takes the job description, sends it to an LLM alongside your resume data, and outputs a ready-to-send `.docx` resume and cover letter.
+Automatically tailors your resume and generates a cover letter for any job posting. Paste a LinkedIn URL, and the tool scrapes the job description, sends it to an LLM alongside your resume data, and outputs a ready-to-send `.docx` resume and cover letter. LLM responses are validated against strict JSON schemas, with automatic repair and retry logic to handle malformed output.
 
-Also supports referencing a Google Sheet, via the Google Cloud API see [Google Sheets Setup](#google-sheets-setup-optional). 
+Also supports referencing a Google Sheet via the Google Cloud API — see [Google Sheets Setup](#google-sheets-setup-optional).
 
 ---
 
 ## How It Works
 
 1. Reads your resume from `resume.yaml`
-2. Takes the job description from the provided LinkedIn URL
-3. Sends both to an Ollama Cloud LLM to generate a tailored resume and cover letter
-4. Writes `resume.docx` and `cover_letter.docx` to a dated output folder
+2. Checks the Google Sheet's **Details** column for a cached job description — scrapes the URL only if it is empty
+3. Sends the job description and resume to an Ollama Cloud LLM to generate a tailored resume, cover letter, and priority rating
+4. Validates LLM output against strict JSON schemas — automatically repairs malformed JSON and retries the full LLM call if repair fails (configurable via `max_retries` in `config.yaml`)
+5. Writes named `.docx` files to a dated output folder
+6. Writes the job description, priority score, reasoning, and status back to the sheet in one request
 
 Optionally, jobs can be queued in a Google Sheet and processed in batch.
 
@@ -75,7 +77,7 @@ cp .env.example .env
 
 Edit `.env` and add your Ollama Cloud API key:
 
-```
+```env
 OLLAMA_API_KEY=your_ollama_api_key_here
 ```
 
@@ -88,7 +90,7 @@ cp example_resume.yaml resume.yaml
 Edit `resume.yaml` with your information. The key sections are:
 
 | Section | Description |
-|---|---|
+| --- | --- |
 | `basics` | Name, email, phone, location, LinkedIn/GitHub profiles |
 | `work` | Employment history — each entry has a `description` (paragraph summary) and `highlights` (bullet points) |
 | `education` | Degree, field of study, institution |
@@ -111,12 +113,15 @@ ollama:
   host: "https://ollama.com"
   model: "gpt-oss:120b"   # any model available on your Ollama account
   temperature: 0.3
+  max_retries: 3          # LLM call retries if JSON parsing fails after repair
 
 paths:
   resume_yaml: "resume.yaml"
   output_dir: "output"
   credentials: "credentials/google_service_account.json"
 ```
+
+`max_retries` controls how many times the tool will re-call the LLM if the response cannot be parsed or repaired. Set to `1` to disable retries.
 
 ---
 
@@ -143,9 +148,30 @@ uv run python main.py run --row 2
 
 # Process all rows where Status is blank
 uv run python main.py run --all
+
+# Reprocess a row even if it already has a status
+uv run python main.py run --row 2 --force
+uv run python main.py run --all --force
 ```
 
-After each successful run, the row's Status is automatically set to **Generated**. Any row with a non-blank status is skipped — clear it in the sheet to reprocess.
+After each successful run, the tool automatically writes back to the sheet:
+
+| Column | Value |
+| --- | --- |
+| **Status** | `Generated` |
+| **Details** | Scraped job description (cached for future runs — skips re-scraping) |
+| **Priority** | 1-10 score (1 = apply immediately, 10 = low priority) |
+| **Reasoning** | One-sentence explanation of the priority score |
+
+Any row with a non-blank Status is skipped on future runs. Use `--force` to reprocess it, or clear the Status cell manually.
+
+### Optional flags
+
+| Flag | Description |
+| --- | --- |
+| `--resume-only` | Generate only the resume, skip the cover letter |
+| `--cover-only` | Generate only the cover letter, skip the resume |
+| `--force` | Reprocess rows that already have a Status set |
 
 ---
 
@@ -169,21 +195,23 @@ google_sheets:
     url: "URL"
     status: "Status"
     details: "Details"
+    priority: "Priority"
+    reasoning: "Reasoning"
 ```
 
-Your sheet should have columns: **Job Title**, **URL**, **Status**, **Details**.
+Your sheet should have columns: **Job Title**, **URL**, **Status**, **Details**, **Priority**, **Reasoning**.
 
 ---
 
 ## Output
 
-Each run creates a timestamped folder under `output/`:
+Each run creates a timestamped folder under `output/`. Files are named after the candidate and role:
 
-```
+```text
 output/
-  CompanyName_RoleTitle_2025-01-15/
-    resume.docx
-    cover_letter.docx
+  CGI_AI_Engineering_2026-03-10/
+    Nicolas St-Amour - AI Engineering - Resume.docx
+    Nicolas St-Amour - AI Engineering - Cover Letter.docx
 ```
 
 ---

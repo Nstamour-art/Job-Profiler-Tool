@@ -138,7 +138,7 @@ def process_job(job: dict, config: dict, resume: dict,
             output_path=cover_path,
         )
 
-    return str(folder), job_data
+    return str(folder), job_data, resume_json
 
 
 # ---------------------------------------------------------------------------
@@ -197,13 +197,14 @@ def run_jobs(row_num, run_all, direct_url, resume_only, cover_only, force, confi
     if direct_url:
         job = {"url": direct_url, "job_title": "", "status": "", "details": "", "row": None}
         click.echo(f"\nProcessing: {direct_url}")
-        folder, _ = process_job(job, config, resume, resume_only=resume_only, cover_only=cover_only)
+        folder, _, resume_json = process_job(job, config, resume, resume_only=resume_only, cover_only=cover_only)
+        if resume_json is not None:
+            click.echo(f"  Priority: {resume_json.priority}/10 (1=apply now, 10=low priority) — {resume_json.priority_reasoning}")
         click.echo(click.style(f"\n  Saved to: {folder}", fg="green"))
         return
 
     # --- Sheet modes ---
     from src.sheets import get_jobs, update_row
-    from src.llm import generate_suitability
     try:
         all_jobs = get_jobs(config)
     except Exception as e:
@@ -232,24 +233,19 @@ def run_jobs(row_num, run_all, direct_url, resume_only, cover_only, force, confi
         label = job.get("job_title") or job.get("url", "")
         click.echo(f"\nProcessing row {job['row']}: {label}")
         try:
-            folder, job_data = process_job(job, config, resume, resume_only=resume_only, cover_only=cover_only)
+            folder, job_data, resume_json = process_job(job, config, resume, resume_only=resume_only, cover_only=cover_only)
             click.echo(click.style(f"  Saved to: {folder}", fg="green"))
 
-            # Rate suitability
-            click.echo("  Rating suitability …")
-            try:
-                suitability = generate_suitability(job_data, resume, config)
-                click.echo(f"  Suitability: {suitability.rating}/10 — {suitability.reasoning}")
-            except Exception as e:
-                suitability = None
-                click.echo(click.style(f"  Suitability rating failed: {e}", fg="yellow"))
+            if resume_json is not None:
+                click.echo(f"  Priority: {resume_json.priority}/10 (1=apply now, 10=low priority) — {resume_json.priority_reasoning}")
 
-            # Write details, priority, and status back to sheet in one request
+            # Write details, priority, reasoning, and status back to sheet in one request
             updates = {"status": "Generated"}
             if job_data.get("_scraped_fresh") and job_data.get("description"):
                 updates["details"] = job_data["description"]
-            if suitability is not None:
-                updates["priority"] = suitability.rating
+            if resume_json is not None:
+                updates["priority"] = resume_json.priority
+                updates["reasoning"] = resume_json.priority_reasoning
             update_row(config, job["row"], **updates)
             click.echo("  Sheet updated.")
         except Exception as e:

@@ -7,11 +7,13 @@ google_sheets:
     status: "Status"
     details: "Details"
     priority: "Priority"
+    reasoning: "Reasoning"
 
 ollama:
   host: "https://ollama.com"
   model: "gpt-oss:120b"
   temperature: 0.3
+  max_retries: 3
 
 paths:
   resume_yaml: "resume.yaml"
