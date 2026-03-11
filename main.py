@@ -8,6 +8,8 @@ Usage:
   uv run python main.py run --url <linkedin_url> # ad-hoc, skip sheet
 """
 
+from __future__ import annotations
+
 import re
 from datetime import date
 from pathlib import Path
@@ -18,7 +20,7 @@ import yaml
 from dotenv import load_dotenv
 
 if TYPE_CHECKING:
-    from src.llm import ResumeJSON
+    from src.models import ResumeJSON
 
 load_dotenv()
 
@@ -71,7 +73,7 @@ def process_job(job: dict, config: dict, resume: dict,
     company, title, and _scraped_fresh (True if we just scraped, False if details were cached).
     """
     from src.scraper import scrape_job, ScraperError
-    from src.llm import generate_resume, generate_cover_letter
+    from src.llm import parse_job_description, generate_resume, generate_cover_letter
     from src.document import build_resume, build_cover_letter
 
     url = job.get("url", "")
@@ -94,23 +96,27 @@ def process_job(job: dict, config: dict, resume: dict,
         scraped_fresh = True
 
     job_data["_scraped_fresh"] = scraped_fresh
-    company = job_data.get("company") or job.get("job_title", "Unknown")
-    title   = job_data.get("title") or job.get("job_title", "Role")
 
-    # 2. LLM — resume (needed for cover letter context too)
+    # 2. Parse job description into structured details (lightweight model)
+    click.echo("  Parsing job description …")
+    job_details = parse_job_description(job_data, config)
+    company = job_details.company or job_data.get("company") or job.get("job_title", "Unknown")
+    title   = job_details.title   or job_data.get("title")   or job.get("job_title", "Role")
+
+    # 3. LLM — resume (needed for cover letter context too)
     resume_json = None
     if not cover_only:
         click.echo("  Generating tailored resume …")
-        resume_json = generate_resume(job_data, resume, config)
+        resume_json = generate_resume(job_details, resume, config)
 
-    # 3. LLM — cover letter
+    # 4. LLM — cover letter
     cover_json = None
     if not resume_only:
         if resume_json is None:
             click.echo("  Generating resume context for cover letter …")
-            resume_json = generate_resume(job_data, resume, config)
+            resume_json = generate_resume(job_details, resume, config)
         click.echo("  Generating cover letter …")
-        cover_json = generate_cover_letter(job_data, resume, resume_json, config)
+        cover_json = generate_cover_letter(job_details, resume, resume_json, config)
 
     # 4. Build output directory
     today_str = date.today().isoformat()

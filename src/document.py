@@ -388,6 +388,8 @@ def build_cover_letter(cover_json: CoverLetterJSON, personal: dict,
 
     # --- Highlights bullets (optional) ---
     if cover_json.highlights:
+        intro = cover_json.highlights_intro or "A few highlights from my background:"
+        _cover_paragraph(doc, intro, indent=True, before_pt=6, after_pt=2)
         for item in cover_json.highlights:
             _cover_bullet(doc, item)
 
