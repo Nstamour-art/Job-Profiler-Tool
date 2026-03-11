@@ -11,7 +11,8 @@ google_sheets:
 
 ollama:
   host: "https://ollama.com"
-  model: "gpt-oss:120b"
+  model: "gemini-3-flash-preview:cloud"   # any model on your Ollama account (used for resume/cover letter generation)
+  parser_model: "nemotron-3-nano:30b"     # lightweight model for job description parsing (falls back to model if omitted)
   temperature: 0.3
   max_retries: 3
 

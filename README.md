@@ -10,10 +10,11 @@ Also supports referencing a Google Sheet via the Google Cloud API — see [Googl
 
 1. Reads your resume from `resume.yaml`
 2. Checks the Google Sheet's **Details** column for a cached job description — scrapes the URL only if it is empty
-3. Sends the job description and resume to an Ollama Cloud LLM to generate a tailored resume, cover letter, and priority rating
-4. Validates LLM output against strict JSON schemas — automatically repairs malformed JSON and retries the full LLM call if repair fails (configurable via `max_retries` in `config.yaml`)
-5. Writes named `.docx` files to a dated output folder
-6. Writes the job description, priority score, reasoning, and status back to the sheet in one request
+3. Parses the raw job description using a lightweight model (`parser_model`) to extract structured details: company, title, seniority, industry, required skills, responsibilities, and culture signals
+4. Sends the structured job details and resume to the main Ollama Cloud LLM to generate a tailored resume, cover letter, and priority rating
+5. Validates LLM output against strict JSON schemas — automatically repairs malformed JSON and retries the full LLM call if repair fails (configurable via `max_retries` in `config.yaml`)
+6. Writes named `.docx` files to a dated output folder
+7. Writes the job description, priority score, reasoning, and status back to the sheet in one request
 
 Optionally, jobs can be queued in a Google Sheet and processed in batch.
 
@@ -111,15 +112,18 @@ Edit `config.yaml` to set your Ollama model, host, and paths:
 ```yaml
 ollama:
   host: "https://ollama.com"
-  model: "gpt-oss:120b"   # any model available on your Ollama account
+  model: "gpt-oss:120b"               # any model on your Ollama account (resume/cover letter generation)
+  parser_model: "nemotron-3-nano:30b"  # lightweight model for job description parsing (falls back to model if omitted)
   temperature: 0.3
-  max_retries: 3          # LLM call retries if JSON parsing fails after repair
+  max_retries: 3                       # LLM call retries if JSON parsing fails after repair
 
 paths:
   resume_yaml: "resume.yaml"
   output_dir: "output"
   credentials: "credentials/google_service_account.json"
 ```
+
+`parser_model` is used in a separate pre-processing step to extract structured information (company, title, skills, responsibilities) from the raw scraped job description before passing it to the main model. Using a smaller model here keeps costs and latency low. If omitted, `model` is used for both stages.
 
 `max_retries` controls how many times the tool will re-call the LLM if the response cannot be parsed or repaired. Set to `1` to disable retries.
 
