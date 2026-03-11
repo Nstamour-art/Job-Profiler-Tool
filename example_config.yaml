@@ -9,12 +9,31 @@ google_sheets:
     priority: "Priority"
     reasoning: "Reasoning"
 
-ollama:
-  host: "https://ollama.com"
-  model: "gemini-3-flash-preview:cloud"   # any model on your Ollama account (used for resume/cover letter generation)
-  parser_model: "nemotron-3-nano:30b"     # lightweight model for job description parsing (falls back to model if omitted)
+llm:
   temperature: 0.3
   max_retries: 3
+
+  # Default model used when --provider local (no flag) — must be available in your local Ollama install
+  model: "llama3.2:latest"
+  parser_model: "llama3.2:latest"
+
+  # Per-provider model overrides — used when --provider <name> is passed
+  cloud:                                   # --provider cloud  (Ollama Cloud, requires OLLAMA_API_KEY)
+    host: "https://ollama.com"
+    model: "gpt-oss:120b"
+    parser_model: "nemotron-3-nano:30b"
+
+  openai:                                  # --provider openai  (requires OPENAI_API_KEY)
+    model: "gpt-4o"
+    parser_model: "gpt-4o-mini"
+
+  anthropic:                               # --provider anthropic  (requires ANTHROPIC_API_KEY)
+    model: "claude-opus-4-6"
+    parser_model: "claude-haiku-4-5-20251001"
+
+  gemini:                                  # --provider gemini  (requires GEMINI_API_KEY)
+    model: "gemini-2.5-pro-preview-03-25"
+    parser_model: "gemini-2.0-flash"
 
 paths:
   resume_yaml: "resume.yaml"

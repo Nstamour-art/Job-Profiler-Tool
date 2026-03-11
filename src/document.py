@@ -14,6 +14,7 @@ Formatting spec:
 """
 
 import os
+import re
 from datetime import date
 from typing import TYPE_CHECKING
 
@@ -172,6 +173,23 @@ def _company_line(doc: "DocxDocument", company: str, location: str, dates: str,
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _end_year(exp) -> int:
+    """Extract the end year from an ExperienceEntry's dates string for sorting.
+
+    Returns 9999 for 'Present' / 'Current' so active roles sort to the top.
+    Falls back to the last 4-digit year found, or 0 if none.
+    """
+    dates = exp.dates or ""
+    if re.search(r"\b(present|current)\b", dates, re.IGNORECASE):
+        return 9999
+    years = re.findall(r"\b(19|20)\d{2}\b", dates)
+    return int(years[-1]) if years else 0
+
+
+# ---------------------------------------------------------------------------
 # Resume builder
 # ---------------------------------------------------------------------------
 
@@ -223,7 +241,7 @@ def build_resume(resume_json: ResumeJSON, personal: dict, education: list,
 
     # --- Professional Experience ---
     _section_heading(doc, "Professional Experience")
-    for exp in resume_json.experience:
+    for exp in sorted(resume_json.experience, key=_end_year, reverse=True):
         _company_line(doc, exp.company, "", exp.dates, right_tab_twips=right_tab)
         _body_paragraph(doc, exp.role, italic=True, before_pt=1, after_pt=1)
         for bullet in exp.bullets:

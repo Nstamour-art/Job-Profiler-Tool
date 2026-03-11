@@ -2,6 +2,8 @@
 
 Automatically tailors your resume and generates a cover letter for any job posting. Paste a LinkedIn URL, and the tool scrapes the job description, sends it to an LLM alongside your resume data, and outputs a ready-to-send `.docx` resume and cover letter. LLM responses are validated against strict JSON schemas, with automatic repair and retry logic to handle malformed output.
 
+Supports local Ollama, Ollama Cloud, OpenAI, Anthropic, and Google Gemini via a `--provider` flag.
+
 Also supports referencing a Google Sheet via the Google Cloud API — see [Google Sheets Setup](#google-sheets-setup-optional).
 
 ---
@@ -11,7 +13,7 @@ Also supports referencing a Google Sheet via the Google Cloud API — see [Googl
 1. Reads your resume from `resume.yaml`
 2. Checks the Google Sheet's **Details** column for a cached job description — scrapes the URL only if it is empty
 3. Parses the raw job description using a lightweight model (`parser_model`) to extract structured details: company, title, seniority, industry, required skills, responsibilities, and culture signals
-4. Sends the structured job details and resume to the main Ollama Cloud LLM to generate a tailored resume, cover letter, and priority rating
+4. Sends the structured job details and resume to the main LLM to generate a tailored resume, cover letter, and priority rating
 5. Validates LLM output against strict JSON schemas — automatically repairs malformed JSON and retries the full LLM call if repair fails (configurable via `max_retries` in `config.yaml`)
 6. Writes named `.docx` files to a dated output folder
 7. Writes the job description, priority score, reasoning, and status back to the sheet in one request
@@ -24,7 +26,12 @@ Optionally, jobs can be queued in a Google Sheet and processed in batch.
 
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/) (package manager)
-- An [Ollama Cloud](https://ollama.com) account and API key
+- At least one of the following, depending on your chosen `--provider`:
+  - **Local Ollama** (default) — [Ollama](https://ollama.com) installed and running locally, no API key needed
+  - **Ollama Cloud** (`--provider cloud`) — an Ollama Cloud account and `OLLAMA_API_KEY`
+  - **OpenAI** (`--provider openai`) — an OpenAI account and `OPENAI_API_KEY`; install SDK: `uv add openai`
+  - **Anthropic** (`--provider anthropic`) — an Anthropic account and `ANTHROPIC_API_KEY`; install SDK: `uv add anthropic`
+  - **Google Gemini** (`--provider gemini`) — a Google AI Studio account and `GEMINI_API_KEY`; install SDK: `uv add google-genai`
 
 ---
 
@@ -34,7 +41,7 @@ Before running the tool, you need four files in place. Three are gitignored and 
 
 | File | Source | Purpose |
 | --- | --- | --- |
-| `.env` | Copy from `.env.example` | Ollama API key |
+| `.env` | Copy from `.env.example` | API key(s) for your chosen provider |
 | `resume.yaml` | Copy from `example_resume.yaml` | Your resume data |
 | `config.yaml` | Copy from `example_config.yaml` | Model and path settings |
 | `credentials/google_service_account.json` | Google Cloud Console | Google Sheets access (optional) |
@@ -70,17 +77,30 @@ uv sync
 uv run playwright install chromium
 ```
 
+If you plan to use OpenAI, Anthropic, or Gemini, also install their SDKs:
+
+```bash
+uv add openai        # --provider openai
+uv add anthropic     # --provider anthropic
+uv add google-genai  # --provider gemini
+```
+
 ### 3. Set up environment variables
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and add your Ollama Cloud API key:
+Edit `.env` and add the API key for your chosen provider:
 
 ```env
-OLLAMA_API_KEY=your_ollama_api_key_here
+OLLAMA_API_KEY=your_key_here      # --provider cloud
+OPENAI_API_KEY=your_key_here      # --provider openai
+ANTHROPIC_API_KEY=your_key_here   # --provider anthropic
+GEMINI_API_KEY=your_key_here      # --provider gemini
 ```
+
+No key is needed for `--provider local` (the default).
 
 ### 4. Fill out your resume
 
@@ -107,23 +127,37 @@ Edit `resume.yaml` with your information. The key sections are:
 cp example_config.yaml config.yaml
 ```
 
-Edit `config.yaml` to set your Ollama model, host, and paths:
+Edit `config.yaml` to set your models and paths. Each provider has its own subsection for `model` and `parser_model`:
 
 ```yaml
-ollama:
-  host: "https://ollama.com"
-  model: "gpt-oss:120b"               # any model on your Ollama account (resume/cover letter generation)
-  parser_model: "nemotron-3-nano:30b"  # lightweight model for job description parsing (falls back to model if omitted)
+llm:
   temperature: 0.3
-  max_retries: 3                       # LLM call retries if JSON parsing fails after repair
+  max_retries: 3         # retries if JSON parsing fails after repair
 
-paths:
-  resume_yaml: "resume.yaml"
-  output_dir: "output"
-  credentials: "credentials/google_service_account.json"
+  # Default models for --provider local (no flag)
+  model: "llama3.2:latest"
+  parser_model: "llama3.2:latest"
+
+  # Per-provider overrides — used when --provider <name> is passed
+  cloud:
+    host: "https://ollama.com"
+    model: "gpt-oss:120b"
+    parser_model: "nemotron-3-nano:30b"
+
+  openai:
+    model: "gpt-4o"
+    parser_model: "gpt-4o-mini"
+
+  anthropic:
+    model: "claude-opus-4-6"
+    parser_model: "claude-haiku-4-5-20251001"
+
+  gemini:
+    model: "gemini-2.5-pro-preview-03-25"
+    parser_model: "gemini-2.0-flash"
 ```
 
-`parser_model` is used in a separate pre-processing step to extract structured information (company, title, skills, responsibilities) from the raw scraped job description before passing it to the main model. Using a smaller model here keeps costs and latency low. If omitted, `model` is used for both stages.
+`parser_model` is used only for the job description parsing step — a lightweight model keeps this fast and cheap. If omitted, `model` is used for both stages.
 
 `max_retries` controls how many times the tool will re-call the LLM if the response cannot be parsed or repaired. Set to `1` to disable retries.
 
@@ -134,7 +168,20 @@ paths:
 ### Process a single job URL (no Google Sheet needed)
 
 ```bash
+# Local Ollama (default — no flag needed)
 uv run python main.py run --url "https://www.linkedin.com/jobs/view/..."
+
+# Ollama Cloud
+uv run python main.py run --url "https://www.linkedin.com/jobs/view/..." --provider cloud
+
+# OpenAI
+uv run python main.py run --url "https://www.linkedin.com/jobs/view/..." --provider openai
+
+# Anthropic
+uv run python main.py run --url "https://www.linkedin.com/jobs/view/..." --provider anthropic
+
+# Google Gemini
+uv run python main.py run --url "https://www.linkedin.com/jobs/view/..." --provider gemini
 ```
 
 Output files are saved to `output/<Company>_<Role>_<date>/`.
@@ -158,6 +205,8 @@ uv run python main.py run --row 2 --force
 uv run python main.py run --all --force
 ```
 
+All sheet commands also accept `--provider` to choose the LLM backend.
+
 After each successful run, the tool automatically writes back to the sheet:
 
 | Column | Value |
@@ -169,10 +218,11 @@ After each successful run, the tool automatically writes back to the sheet:
 
 Any row with a non-blank Status is skipped on future runs. Use `--force` to reprocess it, or clear the Status cell manually.
 
-### Optional flags
+### All flags
 
 | Flag | Description |
 | --- | --- |
+| `--provider` | LLM backend: `local` (default), `cloud`, `openai`, `anthropic`, `gemini` |
 | `--resume-only` | Generate only the resume, skip the cover letter |
 | `--cover-only` | Generate only the cover letter, skip the resume |
 | `--force` | Reprocess rows that already have a Status set |
