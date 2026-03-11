@@ -1,5 +1,5 @@
 import re
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError, ElementHandle
 
 
 class ScraperError(Exception):
@@ -12,7 +12,7 @@ def _clean_text(text: str) -> str:
     return text.strip()
 
 
-def _try_selectors(page, selectors: list[str]) -> object | None:
+def _try_selectors(page, selectors: list[str]) -> ElementHandle | None:
     """Return the first matching element or None."""
     for sel in selectors:
         el = page.query_selector(sel)

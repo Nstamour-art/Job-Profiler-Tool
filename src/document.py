@@ -10,11 +10,12 @@ Formatting spec:
   - Company/location line: 10pt, Bold — company LEFT, dates RIGHT-TABBED
   - Role: 10pt, Italic
   - Bullets: 10pt, 0.25" hanging indent
-  - Education & Certs: borderless 2-column table (left=education, right=certs)
+  - Education & Certs: borderless 2-column table (left=education, right=certs); single-column if no certs returned
 """
 
 import os
 from datetime import date
+from typing import TYPE_CHECKING
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -23,6 +24,9 @@ from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor, Twips
 
 from src.models import CoverLetterJSON, ResumeJSON
+
+if TYPE_CHECKING:
+    from docx.document import Document as DocxDocument
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +55,7 @@ def _set_font(run, size_pt: int, bold: bool = False, italic: bool = False,
         run.font.color.rgb = color
 
 
-def _add_right_tab(paragraph, pos_twips: int = None):
+def _add_right_tab(paragraph, pos_twips: int | None = None):
     """Add a right-aligned tab stop at the right margin."""
     pPr = paragraph._p.get_or_add_pPr()
     tabs = OxmlElement("w:tabs")
@@ -104,7 +108,7 @@ def _cell_bullet(cell, text: str):
     return p
 
 
-def _section_heading(doc: Document, text: str):
+def _section_heading(doc: "DocxDocument", text: str):
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _set_space(p, before_pt=8, after_pt=2)
@@ -126,8 +130,8 @@ def _section_heading(doc: Document, text: str):
     return p
 
 
-def _body_paragraph(doc: Document, text: str, italic: bool = False,
-                    before_pt: float = 0, after_pt: float = 2) -> object:
+def _body_paragraph(doc: "DocxDocument", text: str, italic: bool = False,
+                    before_pt: float = 0, after_pt: float = 2):
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     _set_space(p, before_pt=before_pt, after_pt=after_pt)
@@ -136,7 +140,7 @@ def _body_paragraph(doc: Document, text: str, italic: bool = False,
     return p
 
 
-def _bullet(doc: Document, text: str):
+def _bullet(doc: "DocxDocument", text: str):
     p = doc.add_paragraph(style="List Bullet")
     _set_space(p, before_pt=0, after_pt=1)
     # Clear default run and add our own with correct font
@@ -147,8 +151,8 @@ def _bullet(doc: Document, text: str):
     return p
 
 
-def _company_line(doc: Document, company: str, location: str, dates: str,
-                  right_tab_twips: int = None):
+def _company_line(doc: "DocxDocument", company: str, location: str, dates: str,
+                  right_tab_twips: int | None = None):
     """Company + location LEFT, dates RIGHT using a tab stop."""
     p = doc.add_paragraph()
     _set_space(p, before_pt=6, after_pt=0)
@@ -185,7 +189,7 @@ def build_resume(resume_json: ResumeJSON, personal: dict, education: list,
 
     # Compute right-tab position from actual page geometry (EMU → twips)
     sec = doc.sections[0]
-    text_width_emu = sec.page_width - sec.left_margin - sec.right_margin
+    text_width_emu = (sec.page_width or 0) - (sec.left_margin or 0) - (sec.right_margin or 0)
     right_tab = int(text_width_emu / 635)  # 1 twip = 635 EMU
 
     # --- Header ---
@@ -257,29 +261,36 @@ def build_resume(resume_json: ResumeJSON, personal: dict, education: list,
                 url_run = url_p.add_run(proj.url)
                 _set_font(url_run, BODY_PT, italic=True)
 
-    # --- Education & Certificates (2-column bullets) ---
-    _section_heading(doc, "Education & Certificates")
-    table = doc.add_table(rows=1, cols=2)
-    table.autofit = True
+    # --- Education & Certificates (2-column bullets when certs present) ---
+    has_certs = bool(resume_json.certifications)
+    _section_heading(doc, "Education & Certificates" if has_certs else "Education")
 
-    left_cell = table.cell(0, 0)
-    right_cell = table.cell(0, 1)
-    _no_border_cell(left_cell)
-    _no_border_cell(right_cell)
+    if has_certs:
+        table = doc.add_table(rows=1, cols=2)
+        table.autofit = True
+        left_cell = table.cell(0, 0)
+        right_cell = table.cell(0, 1)
+        _no_border_cell(left_cell)
+        _no_border_cell(right_cell)
 
-    # Left: education
-    left_cell.paragraphs[0].clear()
-    for ed in education:
-        degree_parts = [ed.get("studyType", ""), ed.get("area", "")]
-        degree = " - ".join(p for p in degree_parts if p)
-        parts = [degree, ed.get("institution", "")]
-        text = " | ".join(p for p in parts if p)
-        _cell_bullet(left_cell, text)
+        left_cell.paragraphs[0].clear()
+        for ed in education:
+            degree_parts = [ed.get("studyType", ""), ed.get("area", "")]
+            degree = " - ".join(p for p in degree_parts if p)
+            parts = [degree, ed.get("institution", "")]
+            text = " | ".join(p for p in parts if p)
+            _cell_bullet(left_cell, text)
 
-    # Right: certifications
-    right_cell.paragraphs[0].clear()
-    for cert in resume_json.certifications:
-        _cell_bullet(right_cell, cert)
+        right_cell.paragraphs[0].clear()
+        for cert in resume_json.certifications:
+            _cell_bullet(right_cell, cert)
+    else:
+        for ed in education:
+            degree_parts = [ed.get("studyType", ""), ed.get("area", "")]
+            degree = " - ".join(p for p in degree_parts if p)
+            parts = [degree, ed.get("institution", "")]
+            text = " | ".join(p for p in parts if p)
+            _bullet(doc, text)
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     doc.save(output_path)
@@ -293,7 +304,7 @@ def build_resume(resume_json: ResumeJSON, personal: dict, education: list,
 COVER_PT = 12  # body font size for cover letters (larger than resume's 10pt)
 
 
-def _cover_paragraph(doc: Document, text: str, indent: bool = False,
+def _cover_paragraph(doc: "DocxDocument", text: str, indent: bool = False,
                      before_pt: float = 6, after_pt: float = 6) -> object:
     p = doc.add_paragraph()
     _set_space(p, before_pt=before_pt, after_pt=after_pt)
@@ -304,7 +315,7 @@ def _cover_paragraph(doc: Document, text: str, indent: bool = False,
     return p
 
 
-def _cover_bullet(doc: Document, text: str):
+def _cover_bullet(doc: "DocxDocument", text: str):
     p = doc.add_paragraph(style="List Bullet")
     _set_space(p, before_pt=0, after_pt=2)
     for run in p.runs:

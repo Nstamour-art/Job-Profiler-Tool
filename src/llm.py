@@ -109,7 +109,7 @@ def _get_client(ollama_cfg: dict) -> Client:
     )
 
 
-def _call_ollama(ollama_cfg: dict, system: str, user: str) -> str:
+def _call_ollama(ollama_cfg: dict, system: str, user: str) -> str | None:
     client = _get_client(ollama_cfg)
     messages = [
         {"role": "system", "content": system},
@@ -134,8 +134,8 @@ def _parse_llm_response(model_class: Type[T], raw: str) -> T:
         return model_class.model_validate_json(raw)
     except (ValidationError, json.JSONDecodeError):
         pass
-    repaired = json_repair.repair_json(raw)
-    return model_class.model_validate_json(repaired)
+    repaired, _ = json_repair.repair_json(raw)
+    return model_class.model_validate_json(json.dumps(repaired))
 
 
 def _call_with_retry(model_class: Type[T], ollama_cfg: dict, system: str, user: str) -> T:
@@ -144,6 +144,12 @@ def _call_with_retry(model_class: Type[T], ollama_cfg: dict, system: str, user: 
     last_error: Exception = RuntimeError("No attempts made.")
     for attempt in range(1, max_retries + 1):
         raw = _call_ollama(ollama_cfg, system, user)
+        if raw is None:
+            last_error = RuntimeError("Ollama returned None")
+            if attempt < max_retries:
+                import click
+                click.echo(f"  Ollama returned None (attempt {attempt}/{max_retries}), retrying …")
+            continue
         try:
             return _parse_llm_response(model_class, raw)
         except Exception as e:

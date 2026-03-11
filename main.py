@@ -8,15 +8,17 @@ Usage:
   uv run python main.py run --url <linkedin_url> # ad-hoc, skip sheet
 """
 
-import os
 import re
-import sys
 from datetime import date
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
 import yaml
 from dotenv import load_dotenv
+
+if TYPE_CHECKING:
+    from src.llm import ResumeJSON
 
 load_dotenv()
 
@@ -61,7 +63,7 @@ def _safe_name(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 def process_job(job: dict, config: dict, resume: dict,
-                resume_only: bool = False, cover_only: bool = False) -> tuple[str, dict]:
+                resume_only: bool = False, cover_only: bool = False) -> tuple[str, dict, None | ResumeJSON]:
     """
     Full pipeline for one job:
       scrape (or use cached details) → LLM resume → LLM cover letter → write docx files
@@ -119,7 +121,7 @@ def process_job(job: dict, config: dict, resume: dict,
     safe_title = re.sub(r"[^\w\s\-]", "", title).strip()
 
     # 5. Build documents
-    if not cover_only:
+    if not cover_only and resume_json is not None:
         resume_path = str(_unique_path(folder / f"{candidate_name} - {safe_title} - Resume.docx"))
         click.echo("  Building resume.docx …")
         build_resume(
@@ -129,7 +131,7 @@ def process_job(job: dict, config: dict, resume: dict,
             output_path=resume_path,
         )
 
-    if not resume_only:
+    if not resume_only and cover_json is not None:
         cover_path = str(_unique_path(folder / f"{candidate_name} - {safe_title} - Cover Letter.docx"))
         click.echo("  Building cover_letter.docx …")
         build_cover_letter(
@@ -139,7 +141,7 @@ def process_job(job: dict, config: dict, resume: dict,
             job_title=title,
             output_path=cover_path,
         )
-
+        
     return str(folder), job_data, resume_json
 
 
@@ -246,7 +248,7 @@ def run_jobs(row_num, run_all, direct_url, resume_only, cover_only, force, confi
             if job_data.get("_scraped_fresh") and job_data.get("description"):
                 updates["details"] = job_data["description"]
             if resume_json is not None:
-                updates["priority"] = resume_json.priority
+                updates["priority"] = str(resume_json.priority)
                 updates["reasoning"] = resume_json.priority_reasoning
             update_row(config, job["row"], **updates)
             click.echo("  Sheet updated.")
