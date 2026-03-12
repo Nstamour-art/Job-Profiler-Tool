@@ -29,9 +29,9 @@ Optionally, jobs can be queued in a Google Sheet and processed in batch.
 - At least one of the following, depending on your chosen `--provider`:
   - **Local Ollama** (default) — [Ollama](https://ollama.com) installed and running locally, no API key needed
   - **Ollama Cloud** (`--provider cloud`) — an Ollama Cloud account and `OLLAMA_API_KEY`
-  - **OpenAI** (`--provider openai`) — an OpenAI account and `OPENAI_API_KEY`; install SDK: `uv add openai`
-  - **Anthropic** (`--provider anthropic`) — an Anthropic account and `ANTHROPIC_API_KEY`; install SDK: `uv add anthropic`
-  - **Google Gemini** (`--provider gemini`) — a Google AI Studio account and `GEMINI_API_KEY`; install SDK: `uv add google-genai`
+  - **OpenAI** (`--provider openai`) — an OpenAI account and `OPENAI_API_KEY`
+  - **Anthropic** (`--provider anthropic`) — an Anthropic account and `ANTHROPIC_API_KEY`
+  - **Google Gemini** (`--provider gemini`) — a Google AI Studio account and `GEMINI_API_KEY`
 
 ---
 
@@ -75,14 +75,6 @@ git clone https://github.com/nstamour-art/Job-Profiler-Tool.git
 cd Job-Profiler-Tool
 uv sync
 uv run playwright install chromium
-```
-
-If you plan to use OpenAI, Anthropic, or Gemini, also install their SDKs:
-
-```bash
-uv add openai        # --provider openai
-uv add anthropic     # --provider anthropic
-uv add google-genai  # --provider gemini
 ```
 
 ### 3. Set up environment variables
@@ -132,34 +124,45 @@ Edit `config.yaml` to set your models and paths. Each provider has its own subse
 ```yaml
 llm:
   temperature: 0.3
-  max_retries: 3         # retries if JSON parsing fails after repair
+  max_retries: 3         # retries per model if JSON parsing fails after repair
 
   # Default models for --provider local (no flag)
   model: "llama3.2:latest"
   parser_model: "llama3.2:latest"
 
-  # Per-provider overrides — used when --provider <name> is passed
-  cloud:
-    host: "https://ollama.com"
-    model: "gpt-oss:120b"
-    parser_model: "nemotron-3-nano:30b"
-
+  # Per-provider overrides — used when --provider <name> is passed.
+  # fallback_models: tried in order if the primary model returns a rate/capacity error (503, 429).
+  # parser_fallback_models: same, but for the lightweight parsing step.
   openai:
     model: "gpt-4o"
+    fallback_models:
+      - "gpt-4o-mini"
     parser_model: "gpt-4o-mini"
+    parser_fallback_models: []
 
   anthropic:
     model: "claude-opus-4-6"
+    fallback_models:
+      - "claude-sonnet-4-6"
+      - "claude-haiku-4-5-20251001"
     parser_model: "claude-haiku-4-5-20251001"
+    parser_fallback_models: []
 
   gemini:
     model: "gemini-2.5-pro-preview-03-25"
+    fallback_models:
+      - "gemini-2.0-flash"
+      - "gemini-2.0-flash-lite"
     parser_model: "gemini-2.0-flash"
+    parser_fallback_models:
+      - "gemini-2.0-flash-lite"
 ```
 
-`parser_model` is used only for the job description parsing step — a lightweight model keeps this fast and cheap. If omitted, `model` is used for both stages.
+**`parser_model`** is used only for the job description parsing step — a lightweight model keeps this fast and cheap. If omitted, `model` is used for both stages.
 
-`max_retries` controls how many times the tool will re-call the LLM if the response cannot be parsed or repaired. Set to `1` to disable retries.
+**`fallback_models`** / **`parser_fallback_models`** are tried in order when the primary model returns a rate-limit or capacity error (HTTP 503 / 429). If a fallback is available, the tool switches automatically and prints a notice. If none are configured and the primary fails, the script exits with an error.
+
+**`max_retries`** controls how many times the tool re-calls the same model when the LLM returns unparseable JSON (after automatic repair). Set to `1` to disable retries.
 
 ---
 
@@ -222,10 +225,14 @@ Any row with a non-blank Status is skipped on future runs. Use `--force` to repr
 
 | Flag | Description |
 | --- | --- |
+| `--url <url>` | Process a single job URL directly, no Google Sheet needed |
+| `--row <n>` | Process a specific row number from the Google Sheet |
+| `--all` | Process all rows where Status is blank |
 | `--provider` | LLM backend: `local` (default), `cloud`, `openai`, `anthropic`, `gemini` |
 | `--resume-only` | Generate only the resume, skip the cover letter |
 | `--cover-only` | Generate only the cover letter, skip the resume |
 | `--force` | Reprocess rows that already have a Status set |
+| `--config` | Path to a custom config file (default: `config.yaml`) |
 
 ---
 
