@@ -17,23 +17,39 @@ llm:
   model: "llama3.2:latest"
   parser_model: "llama3.2:latest"
 
-  # Per-provider model overrides — used when --provider <name> is passed
+  # Per-provider model overrides — used when --provider <name> is passed.
+  # fallback_models: tried in order if the primary model returns a rate/capacity error (503, 429).
+  # parser_fallback_models: same, but for the lightweight parsing step.
   cloud:                                   # --provider cloud  (Ollama Cloud, requires OLLAMA_API_KEY)
     host: "https://ollama.com"
     model: "gpt-oss:120b"
+    fallback_models: []
     parser_model: "nemotron-3-nano:30b"
+    parser_fallback_models: []
 
   openai:                                  # --provider openai  (requires OPENAI_API_KEY)
     model: "gpt-4o"
+    fallback_models:
+      - "gpt-4o-mini"
     parser_model: "gpt-4o-mini"
+    parser_fallback_models: []
 
   anthropic:                               # --provider anthropic  (requires ANTHROPIC_API_KEY)
     model: "claude-opus-4-6"
+    fallback_models:
+      - "claude-sonnet-4-6"
+      - "claude-haiku-4-5-20251001"
     parser_model: "claude-haiku-4-5-20251001"
+    parser_fallback_models: []
 
   gemini:                                  # --provider gemini  (requires GEMINI_API_KEY)
     model: "gemini-2.5-pro-preview-03-25"
+    fallback_models:
+      - "gemini-2.0-flash"
+      - "gemini-2.0-flash-lite"
     parser_model: "gemini-2.0-flash"
+    parser_fallback_models:
+      - "gemini-2.0-flash-lite"
 
 paths:
   resume_yaml: "resume.yaml"

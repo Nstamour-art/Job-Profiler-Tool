@@ -70,8 +70,8 @@ def process_job(
     config: dict,
     resume: dict,
     provider: "LLMProvider",
-    model: str,
-    parser_model: str,
+    models: list[str],
+    parser_models: list[str],
     resume_only: bool = False,
     cover_only: bool = False,
 ) -> tuple[str, dict, None | ResumeJSON]:
@@ -107,7 +107,7 @@ def process_job(
 
     # 2. Parse job description into structured details (lightweight model)
     click.echo("  Parsing job description …")
-    job_details = parse_job_description(job_data, config, provider, parser_model)
+    job_details = parse_job_description(job_data, config, provider, parser_models)
     company = job_details.company or job_data.get("company") or job.get("job_title", "Unknown")
     title   = job_details.title   or job_data.get("title")   or job.get("job_title", "Role")
 
@@ -115,16 +115,16 @@ def process_job(
     resume_json = None
     if not cover_only:
         click.echo("  Generating tailored resume …")
-        resume_json = generate_resume(job_details, resume, config, provider, model)
+        resume_json = generate_resume(job_details, resume, config, provider, models)
 
     # 4. LLM — cover letter
     cover_json = None
     if not resume_only:
         if resume_json is None:
             click.echo("  Generating resume context for cover letter …")
-            resume_json = generate_resume(job_details, resume, config, provider, model)
+            resume_json = generate_resume(job_details, resume, config, provider, models)
         click.echo("  Generating cover letter …")
-        cover_json = generate_cover_letter(job_details, resume, resume_json, config, provider, model)
+        cover_json = generate_cover_letter(job_details, resume, resume_json, config, provider, models)
 
     # 4. Build output directory
     today_str = date.today().isoformat()
@@ -218,15 +218,15 @@ def run_jobs(row_num, run_all, direct_url, resume_only, cover_only, force, provi
     resolved_provider = provider_name or "local"
     llm_cfg = config["llm"]
     provider = get_provider(resolved_provider, llm_cfg)
-    model, parser_model = resolve_models(resolved_provider, llm_cfg)
-    click.echo(f"Provider: {resolved_provider}  |  model: {model}  |  parser: {parser_model}")
+    models, parser_models = resolve_models(resolved_provider, llm_cfg)
+    click.echo(f"Provider: {resolved_provider}  |  model: {models[0]}  |  parser: {parser_models[0]}")
 
     # --- Ad-hoc URL mode ---
     if direct_url:
         job = {"url": direct_url, "job_title": "", "status": "", "details": "", "row": None}
         click.echo(f"\nProcessing: {direct_url}")
         folder, _, resume_json = process_job(
-            job, config, resume, provider, model, parser_model,
+            job, config, resume, provider, models, parser_models,
             resume_only=resume_only, cover_only=cover_only,
         )
         if resume_json is not None:
@@ -265,7 +265,7 @@ def run_jobs(row_num, run_all, direct_url, resume_only, cover_only, force, provi
         click.echo(f"\nProcessing row {job['row']}: {label}")
         try:
             folder, job_data, resume_json = process_job(
-                job, config, resume, provider, model, parser_model,
+                job, config, resume, provider, models, parser_models,
                 resume_only=resume_only, cover_only=cover_only,
             )
             click.echo(click.style(f"  Saved to: {folder}", fg="green"))

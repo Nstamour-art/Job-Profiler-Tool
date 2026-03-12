@@ -69,7 +69,7 @@ Rules:
 - Keep it professional but personable — not generic
 - If a company name or role is written in multiple languages, pick English.
 - opening: a strong hook paragraph that names the role and leads with a compelling reason to hire the candidate
-- body_paragraphs: 1-3 paragraphs that connect the candidate's background to the job requirements; If the role is not a perfect match to the candidate's experience, use this space to proactively address potential concerns and reframe the candidate's unique strengths as assets for this role. If highlights are included, end the last body paragraph so it flows naturally into the bullet list.
+- body_paragraphs: 1-2 paragraphs that connect the candidate's background to the job requirements; If the role is not a perfect match to the candidate's experience, use this space to proactively address potential concerns and reframe the candidate's unique strengths as assets for this role. If highlights are included, end the last body paragraph so it flows naturally into the bullet list.
 - highlights_intro: a short transition sentence (e.g. "A few highlights from my background:") that leads into the bullet points; use an empty string "" if highlights is empty
 - highlights: 2-5 bullet points that call out specific achievements or skills if they add emphasis;
   use an empty list [] if bullets aren't needed

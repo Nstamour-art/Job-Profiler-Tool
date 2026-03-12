@@ -156,6 +156,19 @@ class GeminiProvider(LLMProvider):
 
 PROVIDER_NAMES = ["local", "cloud", "openai", "anthropic", "gemini"]
 
+_RATE_ERROR_SIGNALS = {
+    "503", "429",
+    "rate limit", "quota", "quota exceeded",
+    "unavailable", "overloaded", "too many requests",
+    "resource exhausted", "capacity",
+}
+
+
+def _is_rate_error(exc: Exception) -> bool:
+    """Return True if the exception looks like a rate-limit or capacity error."""
+    msg = str(exc).lower()
+    return any(signal in msg for signal in _RATE_ERROR_SIGNALS)
+
 
 def get_provider(name: str, llm_cfg: dict) -> LLMProvider:
     """Instantiate and return the LLM provider for the given name."""
@@ -177,13 +190,20 @@ def get_provider(name: str, llm_cfg: dict) -> LLMProvider:
             )
 
 
-def resolve_models(name: str, llm_cfg: dict) -> tuple[str, str]:
-    """Return (model, parser_model) for the given provider name.
+def resolve_models(name: str, llm_cfg: dict) -> tuple[list[str], list[str]]:
+    """Return (models, parser_models) for the given provider name.
 
-    Looks first in llm.<provider>.model, then falls back to llm.model.
-    parser_model falls back to model if not set.
+    Each list starts with the primary model followed by any configured fallbacks.
+    Looks first in llm.<provider>, then falls back to top-level llm keys.
     """
     provider_cfg = llm_cfg.get(name, {})
-    model = provider_cfg.get("model") or llm_cfg.get("model", "llama3.2:latest")
-    parser_model = provider_cfg.get("parser_model") or llm_cfg.get("parser_model") or model
-    return model, parser_model
+
+    primary = provider_cfg.get("model") or llm_cfg.get("model", "llama3.2:latest")
+    fallbacks = provider_cfg.get("fallback_models", [])
+    models = [primary] + list(fallbacks)
+
+    primary_parser = provider_cfg.get("parser_model") or llm_cfg.get("parser_model") or primary
+    parser_fallbacks = provider_cfg.get("parser_fallback_models", [])
+    parser_models = [primary_parser] + list(parser_fallbacks)
+
+    return models, parser_models

@@ -6,7 +6,7 @@ from typing import Type, TypeVar
 import json_repair
 from src.models import JobDetails, ResumeJSON, CoverLetterJSON
 from src.prompts import RESUME_SYSTEM_PROMPT, COVER_LETTER_SYSTEM_PROMPT, JOB_PARSER_SYSTEM_PROMPT
-from src.providers import LLMProvider
+from src.providers import LLMProvider, _is_rate_error
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -27,35 +27,51 @@ def _call_with_retry(
     llm_cfg: dict,
     system: str,
     prompt: str,
-    model: str,
+    models: list[str],
 ) -> T:
-    """Call the provider and parse the response, retrying on failure."""
+    """Call the provider and parse the response.
+
+    - Retries the same model up to max_retries times on JSON parse failures.
+    - On rate/availability errors, skips immediately to the next fallback model.
+    - Raises once all models and retries are exhausted.
+    """
     import click
     max_retries = llm_cfg.get("max_retries", 3)
     temperature = llm_cfg.get("temperature", 0.3)
     last_error: Exception = RuntimeError("No attempts made.")
 
-    for attempt in range(1, max_retries + 1):
-        try:
-            raw = provider.call(model=model, system=system, prompt=prompt, temperature=temperature)
-        except Exception as e:
-            raise RuntimeError(f"LLM provider error: {e}") from e
+    for i, model in enumerate(models):
+        for attempt in range(1, max_retries + 1):
+            try:
+                raw = provider.call(model=model, system=system, prompt=prompt, temperature=temperature)
+            except Exception as e:
+                last_error = e
+                if _is_rate_error(e) and i < len(models) - 1:
+                    click.echo(f"  {model} unavailable (rate/capacity), switching to {models[i + 1]} ...")
+                    break  # skip to next model
+                raise RuntimeError(f"LLM provider error: {e}") from e
 
-        if raw is None:
-            last_error = RuntimeError("Provider returned None")
-            if attempt < max_retries:
-                click.echo(f"  Provider returned None (attempt {attempt}/{max_retries}), retrying ...")
-            continue
+            if raw is None:
+                last_error = RuntimeError("Provider returned None")
+                if attempt < max_retries:
+                    click.echo(f"  Provider returned None (attempt {attempt}/{max_retries}), retrying ...")
+                continue
 
-        try:
-            return _parse_llm_response(model_class, raw)
-        except Exception as e:
-            last_error = e
-            if attempt < max_retries:
-                click.echo(f"  JSON parse failed (attempt {attempt}/{max_retries}), retrying ...")
+            try:
+                return _parse_llm_response(model_class, raw)
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries:
+                    click.echo(f"  JSON parse failed (attempt {attempt}/{max_retries}), retrying ...")
+        else:
+            # Exhausted retries on this model without a rate-error break — give up
+            raise ValueError(
+                f"LLM returned invalid JSON after {max_retries} attempts on {model}. "
+                f"Last error: {last_error}"
+            ) from last_error
 
-    raise ValueError(
-        f"LLM returned invalid JSON after {max_retries} attempts. Last error: {last_error}"
+    raise RuntimeError(
+        f"All {len(models)} model(s) unavailable. Last error: {last_error}"
     ) from last_error
 
 
@@ -88,7 +104,7 @@ def _format_job_details(details: JobDetails) -> str:
 
 
 def parse_job_description(
-    job: dict, config: dict, provider: LLMProvider, parser_model: str
+    job: dict, config: dict, provider: LLMProvider, parser_models: list[str]
 ) -> JobDetails:
     """Use a lightweight model to extract structured details from the raw job description."""
     prompt = f"""JOB TITLE (from URL/sheet): {job.get('title', job.get('job_title', ''))}
@@ -98,12 +114,12 @@ RAW JOB DESCRIPTION:
 {job['description']}
 """
     return _call_with_retry(
-        JobDetails, provider, config["llm"], JOB_PARSER_SYSTEM_PROMPT, prompt, parser_model
+        JobDetails, provider, config["llm"], JOB_PARSER_SYSTEM_PROMPT, prompt, parser_models
     )
 
 
 def generate_resume(
-    job_details: JobDetails, resume: dict, config: dict, provider: LLMProvider, model: str
+    job_details: JobDetails, resume: dict, config: dict, provider: LLMProvider, models: list[str]
 ) -> ResumeJSON:
     """Produce a tailored ResumeJSON for the given job."""
     prompt = f"""{_format_job_details(job_details)}
@@ -114,7 +130,7 @@ CANDIDATE RESUME DATA (YAML):
 {yaml.dump(_normalize_work_dates(resume), allow_unicode=True, encoding=None)}
 """
     return _call_with_retry(
-        ResumeJSON, provider, config["llm"], RESUME_SYSTEM_PROMPT, prompt, model
+        ResumeJSON, provider, config["llm"], RESUME_SYSTEM_PROMPT, prompt, models
     )
 
 
@@ -124,7 +140,7 @@ def generate_cover_letter(
     resume_json: ResumeJSON,
     config: dict,
     provider: LLMProvider,
-    model: str,
+    models: list[str],
 ) -> CoverLetterJSON:
     """Produce a tailored CoverLetterJSON."""
     prompt = f"""{_format_job_details(job_details)}
@@ -140,5 +156,5 @@ TAILORED EXPERIENCE:
 {yaml.dump([e.model_dump() for e in resume_json.experience], allow_unicode=True, encoding=None)}
 """
     return _call_with_retry(
-        CoverLetterJSON, provider, config["llm"], COVER_LETTER_SYSTEM_PROMPT, prompt, model
+        CoverLetterJSON, provider, config["llm"], COVER_LETTER_SYSTEM_PROMPT, prompt, models
     )
