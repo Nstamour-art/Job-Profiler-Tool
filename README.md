@@ -1,10 +1,12 @@
 # Job Profiler Tool
 
-Automatically tailors your resume and generates a cover letter for any job posting. Paste a LinkedIn URL, and the tool scrapes the job description, sends it to an LLM alongside your resume data, and outputs a ready-to-send `.docx` resume and cover letter. LLM responses are validated against strict JSON schemas, with automatic repair and retry logic to handle malformed output.
+Automatically tailors your resume and generates a cover letter for any job posting. Paste a job URL, and the tool scrapes the posting, sends it to an LLM alongside your resume data, and outputs a ready-to-send `.docx` resume and cover letter. LLM responses are validated against strict JSON schemas, with automatic repair and retry logic to handle malformed output.
+
+Supports any major job board or ATS — LinkedIn, Indeed, Glassdoor, Greenhouse, Lever, Workday, and more.
 
 Supports local Ollama, Ollama Cloud, OpenAI, Anthropic, and Google Gemini via a `--provider` flag.
 
-Also supports referencing a Google Sheet via the Google Cloud API — see [Google Sheets Setup](#google-sheets-setup-optional).
+Also supports referencing a Google Sheet via the Google Cloud API for batch processing — see [Google Sheets Setup](#google-sheets-setup-optional).
 
 ---
 
@@ -12,7 +14,7 @@ Also supports referencing a Google Sheet via the Google Cloud API — see [Googl
 
 1. Reads your resume from `resume.yaml`
 2. Checks the Google Sheet's **Details** column for a cached job description — scrapes the URL only if it is empty
-3. Parses the raw job description using a lightweight model (`parser_model`) to extract structured details: company, title, seniority, industry, required skills, responsibilities, and culture signals
+3. Parses the raw page content using a lightweight model (`parser_model`) to extract structured details: company, title, seniority, industry, salary range, required skills, responsibilities, and culture signals
 4. Sends the structured job details and resume to the main LLM to generate a tailored resume, cover letter, and priority rating
 5. Validates LLM output against strict JSON schemas — automatically repairs malformed JSON and retries the full LLM call if repair fails (configurable via `max_retries` in `config.yaml`)
 6. Writes named `.docx` files to a dated output folder
@@ -170,6 +172,8 @@ llm:
 
 ### Process a single job URL (no Google Sheet needed)
 
+Works with any major job board or ATS — LinkedIn, Indeed, Glassdoor, Greenhouse, Lever, Workday, and more.
+
 ```bash
 # Local Ollama (default — no flag needed)
 uv run python main.py run --url "https://www.linkedin.com/jobs/view/..."
@@ -233,6 +237,7 @@ Any row with a non-blank Status is skipped on future runs. Use `--force` to repr
 | `--cover-only` | Generate only the cover letter, skip the resume |
 | `--force` | Reprocess rows that already have a Status set |
 | `--config` | Path to a custom config file (default: `config.yaml`) |
+| `--debug` | Log scraped content and all LLM outputs to `debug.db` (SQLite) |
 
 ---
 

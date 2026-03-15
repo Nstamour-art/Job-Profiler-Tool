@@ -10,6 +10,7 @@ class JobDetails(BaseModel):
     preferred_skills: list[str]     # nice-to-have skills
     responsibilities: list[str]     # 3-6 core responsibilities
     culture_signals: list[str]      # tone/culture keywords (e.g. "fast-paced", "remote-first")
+    salary_range: str = ""          # e.g. "$120k-$150k", "EUR 60,000-80,000/year", "" if not stated
 
 
 class SkillCategory(BaseModel):

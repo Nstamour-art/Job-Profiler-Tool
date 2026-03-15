@@ -100,17 +100,19 @@ def _format_job_details(details: JobDetails) -> str:
         lines.extend(f"  - {r}" for r in details.responsibilities)
     if details.culture_signals:
         lines.append(f"CULTURE / TONE: {', '.join(details.culture_signals)}")
+    if details.salary_range:
+        lines.append(f"SALARY RANGE: {details.salary_range}")
     return "\n".join(lines)
 
 
 def parse_job_description(
     job: dict, config: dict, provider: LLMProvider, parser_models: list[str]
 ) -> JobDetails:
-    """Use a lightweight model to extract structured details from the raw job description."""
+    """Use a lightweight model to extract structured details from the raw page content."""
     prompt = f"""JOB TITLE (from URL/sheet): {job.get('title', job.get('job_title', ''))}
 COMPANY (from URL/sheet): {job.get('company', '')}
 
-RAW JOB DESCRIPTION:
+RAW PAGE CONTENT:
 {job['description']}
 """
     return _call_with_retry(

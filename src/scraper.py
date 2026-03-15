@@ -1,19 +1,70 @@
 import re
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError, ElementHandle
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
 
 class ScraperError(Exception):
     pass
 
 
+# ---------------------------------------------------------------------------
+# CSS selector priority list — ordered from highest-quality to most-generic.
+# Tries targeted content containers across major job boards first; falls back
+# to full body text if nothing matches.
+#
+# Coverage: LinkedIn (auth + guest), Indeed, Glassdoor, Greenhouse, Lever,
+#           Workday, SmartRecruiters, Ashby, Rippling, Jobvite, BambooHR,
+#           generic HTML5 landmarks.
+# ---------------------------------------------------------------------------
+_CONTENT_SELECTORS: list[str] = [
+    # LinkedIn
+    "#job-details",
+    ".jobs-description-content__text--stretch",
+    ".show-more-less-html__markup",
+    ".description__text",
+    # Indeed
+    "#jobDescriptionText",
+    # Glassdoor
+    "[class*='JobDetails_jobDescription']",
+    "[class*='jobDescriptionContent']",
+    # Greenhouse
+    "#content",
+    "#application",
+    # Lever
+    ".posting-description",
+    # Workday
+    "[data-automation-id='jobPostingDescription']",
+    # SmartRecruiters
+    "[class*='job-description']",
+    ".job-description",
+    # Ashby
+    "[class*='ashby-job-posting-brief-description']",
+    "[class*='JobPosting_description']",
+    # Rippling
+    "[class*='JobPostingLayout']",
+    # Jobvite
+    "#job-description",
+    # BambooHR
+    "#BambooHR-ATS",
+    # Generic HTML5 landmarks
+    "main",
+    "article",
+    "[role='main']",
+]
+
+_MAX_CHARS = 15_000
+
+
 def _clean_text(text: str) -> str:
+    """Normalize whitespace and trim to token-safe length."""
+    text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\s*\n\s*", "\n", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
+    text = text.strip()
+    return text[:_MAX_CHARS]
 
 
-def _try_selectors(page, selectors: list[str]) -> ElementHandle | None:
-    """Return the first matching element or None."""
+def _try_selectors(page, selectors: list[str]):
+    """Return the first matching element handle, or None."""
     for sel in selectors:
         el = page.query_selector(sel)
         if el:
@@ -21,15 +72,50 @@ def _try_selectors(page, selectors: list[str]) -> ElementHandle | None:
     return None
 
 
+def _dismiss_modals(page) -> None:
+    """Attempt to dismiss common login/cookie modals without crashing."""
+    try:
+        page.keyboard.press("Escape")
+    except Exception:
+        pass
+
+    dismiss_selectors = [
+        ".modal__dismiss",
+        "button[aria-label='Dismiss']",
+        "button[id*='accept']",
+        "button[class*='cookie-accept']",
+        "button[class*='consent-accept']",
+        "[aria-label*='Accept']",
+        "[aria-label*='Close']",
+        "button[class*='close']",
+        "button[data-testid='close-button']",
+    ]
+    for sel in dismiss_selectors:
+        try:
+            btn = page.query_selector(sel)
+            if btn and btn.is_visible():
+                btn.click()
+                break
+        except Exception:
+            continue
+
+
 def scrape_job(url: str) -> dict:
     """
-    Scrape a LinkedIn job posting using a headless browser.
+    Scrape a job posting from any site using a headless browser.
+
+    Strategy:
+      1. Load the page with Playwright (handles JS-heavy ATSs).
+      2. Wait for networkidle then dismiss login/cookie modals.
+      3. Try a prioritized list of known content selectors across major job
+         boards. Use the first match. Fall back to full <body> text.
+      4. Clean and truncate the extracted text.
 
     Returns:
-        {"description": str, "company": str, "title": str}
+        {"description": str}
 
     Raises:
-        ScraperError: if the page is blocked or the description cannot be found.
+        ScraperError: if the page times out or yields no usable text.
     """
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -50,51 +136,32 @@ def scrape_job(url: str) -> dict:
             browser.close()
             raise ScraperError(f"Timed out loading {url}: {e}") from e
 
-        # Dismiss login modal if present
+        # Give JS-rendered pages a moment to settle
         try:
-            page.wait_for_selector(".modal__dismiss, button[aria-label='Dismiss']", timeout=4000)
-            page.keyboard.press("Escape")
+            page.wait_for_load_state("networkidle", timeout=5000)
         except PlaywrightTimeoutError:
-            pass
+            pass  # not all pages reach networkidle; proceed anyway
 
-        # Wait for any description element to appear (authenticated or guest selectors)
-        desc_selectors = [
-            "#job-details",                                 # authenticated view
-            ".jobs-description-content__text--stretch",    # authenticated view
-            ".show-more-less-html__markup",                 # guest view
-            ".description__text",                          # guest view (older)
-        ]
-        try:
-            page.wait_for_selector(", ".join(desc_selectors), timeout=10000)
-        except PlaywrightTimeoutError:
-            browser.close()
-            raise ScraperError(
-                "Could not find the job description on this page. "
-                "LinkedIn may have changed its HTML structure or requires login."
-            )
+        _dismiss_modals(page)
 
-        # --- Job description ---
-        desc_el = _try_selectors(page, desc_selectors)
-        if not desc_el:
-            browser.close()
-            raise ScraperError("Could not find the job description on this page.")
-        description = _clean_text(desc_el.inner_text())
-
-        # --- Company name ---
-        company_el = _try_selectors(page, [
-            ".job-details-jobs-unified-top-card__company-name",  # authenticated
-            ".topcard__org-name-link",                           # guest view
-            ".sub-nav-cta__optional-url",                        # guest view fallback
-        ])
-        company = company_el.inner_text().strip() if company_el else ""
-
-        # --- Job title ---
-        title_el = _try_selectors(page, [
-            "h1.top-card-layout__title",   # guest view
-            "h1",                          # fallback
-        ])
-        title = title_el.inner_text().strip() if title_el else ""
+        # Try targeted content selectors; fall back to full body text
+        el = _try_selectors(page, _CONTENT_SELECTORS)
+        if el:
+            raw_text = el.inner_text()
+        else:
+            try:
+                raw_text = page.inner_text("body")
+            except Exception as e:
+                browser.close()
+                raise ScraperError(f"Could not extract page text from {url}: {e}") from e
 
         browser.close()
 
-    return {"description": description, "company": company, "title": title}
+    description = _clean_text(raw_text)
+    if not description:
+        raise ScraperError(
+            f"No text content found on {url}. "
+            "The page may require authentication or be dynamically gated."
+        )
+
+    return {"description": description}

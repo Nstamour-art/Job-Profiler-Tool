@@ -94,8 +94,12 @@ You MUST respond with valid JSON only — no markdown, no explanation. The JSON 
 """
 
 JOB_PARSER_SYSTEM_PROMPT = """\
-Extract structured information from the job posting below.
-Be precise and concise — do not invent details not present in the text.
+Extract structured information from the raw page content of a job posting.
+The content may come from any job board or ATS (LinkedIn, Indeed, Glassdoor, Greenhouse, Lever, Workday, etc.)
+and may include navigation text, cookie banners, or other page noise — focus only on the job-relevant content.
+Be precise and concise — do not invent details not present in the text. Do not Hallucinate or infer information that isn't explicitly stated. If something isn't mentioned, leave it blank or use an empty list.
+For salary_range: extract the exact stated range or value (e.g. "$120k-$150k", "EUR 60,000-80,000/year").
+Use an empty string "" if no salary or compensation range is mentioned anywhere in the content.
 Respond with valid JSON only matching this schema exactly:
 {
   "company": "string",
@@ -105,6 +109,7 @@ Respond with valid JSON only matching this schema exactly:
   "required_skills": ["string"],
   "preferred_skills": ["string"],
   "responsibilities": ["string"],
-  "culture_signals": ["string"]
+  "culture_signals": ["string"],
+  "salary_range": "string"
 }
 """

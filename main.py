@@ -74,6 +74,7 @@ def process_job(
     parser_models: list[str],
     resume_only: bool = False,
     cover_only: bool = False,
+    debug_run_id: int | None = None,
 ) -> tuple[str, dict, None | ResumeJSON]:
     """
     Full pipeline for one job:
@@ -83,6 +84,7 @@ def process_job(
     from src.scraper import scrape_job, ScraperError
     from src.llm import parse_job_description, generate_resume, generate_cover_letter
     from src.document import build_resume, build_cover_letter
+    from src.debug import log_scraped, log_job_details, log_resume, log_cover_letter, log_output_folder
 
     url = job.get("url", "")
     if not url:
@@ -105,11 +107,17 @@ def process_job(
 
     job_data["_scraped_fresh"] = scraped_fresh
 
+    if debug_run_id is not None:
+        log_scraped(debug_run_id, job_data.get("description", ""))
+
     # 2. Parse job description into structured details (lightweight model)
     click.echo("  Parsing job description …")
     job_details = parse_job_description(job_data, config, provider, parser_models)
     company = job_details.company or job_data.get("company") or job.get("job_title", "Unknown")
     title   = job_details.title   or job_data.get("title")   or job.get("job_title", "Role")
+
+    if debug_run_id is not None:
+        log_job_details(debug_run_id, job_details)
 
     # 3. LLM — resume (needed for cover letter context too)
     resume_json = None
@@ -126,10 +134,19 @@ def process_job(
         click.echo("  Generating cover letter …")
         cover_json = generate_cover_letter(job_details, resume, resume_json, config, provider, models)
 
-    # 4. Build output directory
+    if debug_run_id is not None:
+        if resume_json is not None:
+            log_resume(debug_run_id, resume_json)
+        if cover_json is not None:
+            log_cover_letter(debug_run_id, cover_json)
+
+    # 5. Build output directory
     today_str = date.today().isoformat()
     folder = Path(config["paths"]["output_dir"]) / f"{_safe_name(company)}_{_safe_name(title)}_{today_str}"
     folder.mkdir(parents=True, exist_ok=True)
+
+    if debug_run_id is not None:
+        log_output_folder(debug_run_id, str(folder))
 
     candidate_name = resume["basics"]["name"]
     safe_title = re.sub(r"[^\w\s\-]", "", title).strip()
@@ -206,7 +223,9 @@ def list_jobs(config_path):
               type=click.Choice(["local", "cloud", "openai", "anthropic", "gemini"]),
               help="LLM provider. Omit for local Ollama (default).")
 @click.option("--config", "config_path", default="config.yaml", show_default=True)
-def run_jobs(row_num, run_all, direct_url, resume_only, cover_only, force, provider_name, config_path):
+@click.option("--debug", is_flag=True, default=False,
+              help="Log scraped content and LLM outputs to debug.db (SQLite).")
+def run_jobs(row_num, run_all, direct_url, resume_only, cover_only, force, provider_name, config_path, debug):
     """Scrape, tailor, and generate resume + cover letter documents."""
     if resume_only and cover_only:
         raise click.UsageError("Cannot use --resume-only and --cover-only together.")
@@ -221,13 +240,20 @@ def run_jobs(row_num, run_all, direct_url, resume_only, cover_only, force, provi
     models, parser_models = resolve_models(resolved_provider, llm_cfg)
     click.echo(f"Provider: {resolved_provider}  |  model: {models[0]}  |  parser: {parser_models[0]}")
 
+    from src.debug import init_db, log_run
+    if debug:
+        init_db()
+        click.echo(click.style("  Debug mode enabled — logging to debug.db", fg="cyan"))
+
     # --- Ad-hoc URL mode ---
     if direct_url:
         job = {"url": direct_url, "job_title": "", "status": "", "details": "", "row": None}
         click.echo(f"\nProcessing: {direct_url}")
+        debug_run_id = log_run(direct_url, resolved_provider, models[0], parser_models[0]) if debug else None
         folder, _, resume_json = process_job(
             job, config, resume, provider, models, parser_models,
             resume_only=resume_only, cover_only=cover_only,
+            debug_run_id=debug_run_id,
         )
         if resume_json is not None:
             click.echo(f"  Priority: {resume_json.priority}/10 (1=apply now, 10=low priority) — {resume_json.priority_reasoning}")
@@ -264,9 +290,11 @@ def run_jobs(row_num, run_all, direct_url, resume_only, cover_only, force, provi
         label = job.get("job_title") or job.get("url", "")
         click.echo(f"\nProcessing row {job['row']}: {label}")
         try:
+            debug_run_id = log_run(job.get("url", ""), resolved_provider, models[0], parser_models[0]) if debug else None
             folder, job_data, resume_json = process_job(
                 job, config, resume, provider, models, parser_models,
                 resume_only=resume_only, cover_only=cover_only,
+                debug_run_id=debug_run_id,
             )
             click.echo(click.style(f"  Saved to: {folder}", fg="green"))
 
