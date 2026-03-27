@@ -276,8 +276,8 @@ Each run creates a timestamped folder under `output/`. Files are named after the
 ```text
 output/
   CGI_AI_Engineering_2026-03-10/
-    Nicolas St-Amour - AI Engineering - Resume.docx
-    Nicolas St-Amour - AI Engineering - Cover Letter.docx
+    John Doe - Some Job Title - Resume.docx
+    John Doe - Some Job Title - Cover Letter.docx
 ```
 
 ---
