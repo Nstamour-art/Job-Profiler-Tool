@@ -136,9 +136,10 @@ def _interview_section(
                     )
                 except Exception as exc:
                     print(f"  Re-extraction failed: {exc}. Keeping previous result.\n")
-                print(f"\nUpdated {section}:\n")
-                print(_format_extracted(section, extracted))
-                print()
+                else:
+                    print(f"\nUpdated {section}:\n")
+                    print(_format_extracted(section, extracted))
+                    print()
             else:
                 print("  Please type 'yes', 'edit', or 'skip'.")
 

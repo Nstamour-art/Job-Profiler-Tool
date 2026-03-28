@@ -174,3 +174,27 @@ def test_run_onboarding_returns_complete_resume_dict(tmp_path, sample_config):
 
     for section in ("basics", "work", "education", "skills", "projects", "certificates"):
         assert section in resume
+
+
+def test_interview_section_edit_reextraction_failure_keeps_original(sample_config):
+    mock_provider = MagicMock()
+    original = BasicsSection(name="Jane Doe", email="jane@example.com")
+
+    call_count = {"n": 0}
+
+    def fake_extract(*args, **kwargs):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return original
+        raise ValueError("LLM error")
+
+    # Inputs: initial answer, "edit" at confirm, correction text, "yes" at second confirm
+    inputs = iter(["Jane Doe", "edit", "fix something", "yes"])
+
+    with patch("src.onboarding.extract_section", side_effect=fake_extract):
+        with patch("builtins.input", side_effect=inputs):
+            from src.onboarding import _interview_section
+            result = _interview_section("basics", mock_provider, ["model"], sample_config["llm"])
+
+    # Should return original extracted value, not crash
+    assert result["name"] == "Jane Doe"
