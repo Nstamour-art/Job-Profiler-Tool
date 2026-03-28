@@ -10,18 +10,9 @@ Usage:
 
 from __future__ import annotations
 
-import re
-from datetime import date
-from pathlib import Path
-from typing import TYPE_CHECKING
-
 import click
 import yaml
 from dotenv import load_dotenv
-
-if TYPE_CHECKING:
-    from src.models import ResumeJSON
-    from src.providers import LLMProvider
 
 load_dotenv()
 
@@ -38,142 +29,6 @@ def load_config(config_path: str = "config.yaml") -> dict:
 def load_resume(resume_path: str) -> dict:
     with open(resume_path, encoding="utf-8") as f:
         return yaml.safe_load(f)
-
-
-def _unique_path(path: Path) -> Path:
-    """Return path with ' (1)', ' (2)', … suffix if it already exists."""
-    if not path.exists():
-        return path
-    stem = path.stem
-    suffix = path.suffix
-    parent = path.parent
-    counter = 1
-    while True:
-        candidate = parent / f"{stem} ({counter}){suffix}"
-        if not candidate.exists():
-            return candidate
-        counter += 1
-
-
-def _safe_name(text: str) -> str:
-    """Slugify a string for use in a directory name."""
-    text = re.sub(r"[^\w\s\-]", "", text)   # strip punctuation
-    return re.sub(r"\s+", "_", text).strip("_")[:40]
-
-
-# ---------------------------------------------------------------------------
-# Core pipeline
-# ---------------------------------------------------------------------------
-
-def process_job(
-    job: dict,
-    config: dict,
-    resume: dict,
-    provider: "LLMProvider",
-    models: list[str],
-    parser_models: list[str],
-    resume_only: bool = False,
-    cover_only: bool = False,
-    debug_run_id: int | None = None,
-) -> tuple[str, dict, None | ResumeJSON]:
-    """
-    Full pipeline for one job:
-      scrape (or use cached details) → parse → LLM resume → LLM cover letter → write docx files
-    Returns (output_directory_path, job_data, resume_json).
-    """
-    from src.scraper import scrape_job, ScraperError
-    from src.llm import parse_job_description, generate_resume, generate_cover_letter
-    from src.document import build_resume, build_cover_letter
-    from src.debug import log_scraped, log_job_details, log_resume, log_cover_letter, log_output_folder
-
-    url = job.get("url", "")
-    if not url:
-        raise ValueError("Job has no URL.")
-
-    # 1. Use cached description from Details column if available, otherwise scrape
-    cached_description = job.get("details", "").strip()
-    if cached_description:
-        click.echo("  Using cached job description from sheet.")
-        job_data = {**job, "description": cached_description}
-        scraped_fresh = False
-    else:
-        click.echo(f"  Scraping {url} …")
-        try:
-            scraped = scrape_job(url)
-        except ScraperError as e:
-            raise click.ClickException(str(e))
-        job_data = {**job, **scraped}
-        scraped_fresh = True
-
-    job_data["_scraped_fresh"] = scraped_fresh
-
-    if debug_run_id is not None:
-        log_scraped(debug_run_id, job_data.get("description", ""))
-
-    # 2. Parse job description into structured details (lightweight model)
-    click.echo("  Parsing job description …")
-    job_details = parse_job_description(job_data, config, provider, parser_models)
-    company = job_details.company or job_data.get("company") or job.get("job_title", "Unknown")
-    title   = job_details.title   or job_data.get("title")   or job.get("job_title", "Role")
-
-    if debug_run_id is not None:
-        log_job_details(debug_run_id, job_details)
-
-    # 3. LLM — resume (needed for cover letter context too)
-    resume_json = None
-    if not cover_only:
-        click.echo("  Generating tailored resume …")
-        resume_json = generate_resume(job_details, resume, config, provider, models)
-
-    # 4. LLM — cover letter
-    cover_json = None
-    if not resume_only:
-        if resume_json is None:
-            click.echo("  Generating resume context for cover letter …")
-            resume_json = generate_resume(job_details, resume, config, provider, models)
-        click.echo("  Generating cover letter …")
-        cover_json = generate_cover_letter(job_details, resume, resume_json, config, provider, models)
-
-    if debug_run_id is not None:
-        if resume_json is not None:
-            log_resume(debug_run_id, resume_json)
-        if cover_json is not None:
-            log_cover_letter(debug_run_id, cover_json)
-
-    # 5. Build output directory
-    today_str = date.today().isoformat()
-    folder = Path(config["paths"]["output_dir"]) / f"{_safe_name(company)}_{_safe_name(title)}_{today_str}"
-    folder.mkdir(parents=True, exist_ok=True)
-
-    if debug_run_id is not None:
-        log_output_folder(debug_run_id, str(folder))
-
-    candidate_name = resume["basics"]["name"]
-    safe_title = re.sub(r"[^\w\s\-]", "", title).strip()
-
-    # 5. Build documents
-    if not cover_only and resume_json is not None:
-        resume_path = str(_unique_path(folder / f"{candidate_name} - {safe_title} - Resume.docx"))
-        click.echo("  Building resume.docx …")
-        build_resume(
-            resume_json=resume_json,
-            personal=resume["basics"],
-            education=resume.get("education", []),
-            output_path=resume_path,
-        )
-
-    if not resume_only and cover_json is not None:
-        cover_path = str(_unique_path(folder / f"{candidate_name} - {safe_title} - Cover Letter.docx"))
-        click.echo("  Building cover_letter.docx …")
-        build_cover_letter(
-            cover_json=cover_json,
-            personal=resume["basics"],
-            company=company,
-            job_title=title,
-            output_path=cover_path,
-        )
-        
-    return str(folder), job_data, resume_json
 
 
 # ---------------------------------------------------------------------------
@@ -207,26 +62,31 @@ def list_jobs(config_path):
 
 
 @cli.command("run")
-@click.option("--row", "row_num", type=int, default=None,
-              help="Process a specific sheet row number.")
-@click.option("--all", "run_all", is_flag=True, default=False,
-              help="Process all rows where Status is blank.")
 @click.option("--url", "direct_url", default=None,
-              help="Process a single LinkedIn URL directly (skips sheet).")
+              help="Process a single job URL directly (bypasses agent).")
 @click.option("--resume-only", is_flag=True, default=False,
-              help="Generate only the resume (skip cover letter).")
+              help="Generate only the resume (skip cover letter). URL mode only.")
 @click.option("--cover-only", is_flag=True, default=False,
-              help="Generate only the cover letter (skip resume).")
-@click.option("--force", is_flag=True, default=False,
-              help="Reprocess rows even if Status is already set.")
-@click.option("--provider", "provider_name", default=None, show_default=True,
+              help="Generate only the cover letter (skip resume). URL mode only.")
+@click.option("--provider", "provider_name", default=None,
               type=click.Choice(["local", "cloud", "openai", "anthropic", "gemini"]),
               help="LLM provider. Omit for local Ollama (default).")
 @click.option("--config", "config_path", default="config.yaml", show_default=True)
 @click.option("--debug", is_flag=True, default=False,
-              help="Log scraped content and LLM outputs to debug.db (SQLite).")
-def run_jobs(row_num, run_all, direct_url, resume_only, cover_only, force, provider_name, config_path, debug):
-    """Scrape, tailor, and generate resume + cover letter documents."""
+              help="Log scraped content and LLM outputs to debug.db.")
+@click.option("--row", "row_num", type=int, default=None, hidden=True)
+@click.option("--all", "run_all", is_flag=True, default=False, hidden=True)
+@click.option("--force", is_flag=True, default=False, hidden=True)
+def run_jobs(direct_url, resume_only, cover_only, provider_name, config_path, debug,
+             row_num, run_all, force):
+    """Search for jobs with the agent, or process a single URL with --url."""
+    if row_num is not None or run_all or force:
+        raise click.UsageError(
+            "--row, --all, and --force are no longer supported.\n"
+            "Run without --url to use the new agent-driven search mode.\n"
+            "The Google Sheet is now an output log — the agent writes to it automatically."
+        )
+
     if resume_only and cover_only:
         raise click.UsageError("Cannot use --resume-only and --cover-only together.")
 
@@ -235,18 +95,20 @@ def run_jobs(row_num, run_all, direct_url, resume_only, cover_only, force, provi
 
     from src.providers import get_provider, resolve_models
     resolved_provider = provider_name or "local"
-    llm_cfg = config["llm"]
-    provider = get_provider(resolved_provider, llm_cfg)
-    models, parser_models = resolve_models(resolved_provider, llm_cfg)
-    click.echo(f"Provider: {resolved_provider}  |  model: {models[0]}  |  parser: {parser_models[0]}")
 
-    from src.debug import init_db, log_run
-    if debug:
-        init_db()
-        click.echo(click.style("  Debug mode enabled — logging to debug.db", fg="cyan"))
-
-    # --- Ad-hoc URL mode ---
+    # --- Direct URL mode (existing pipeline, unchanged) ---
     if direct_url:
+        llm_cfg = config["llm"]
+        provider = get_provider(resolved_provider, llm_cfg)
+        models, parser_models = resolve_models(resolved_provider, llm_cfg)
+        click.echo(f"Provider: {resolved_provider}  |  model: {models[0]}  |  parser: {parser_models[0]}")
+
+        from src.debug import init_db, log_run
+        if debug:
+            init_db()
+            click.echo(click.style("  Debug mode enabled — logging to debug.db", fg="cyan"))
+
+        from src.pipeline import process_job
         job = {"url": direct_url, "job_title": "", "status": "", "details": "", "row": None}
         click.echo(f"\nProcessing: {direct_url}")
         debug_run_id = log_run(direct_url, resolved_provider, models[0], parser_models[0]) if debug else None
@@ -256,62 +118,13 @@ def run_jobs(row_num, run_all, direct_url, resume_only, cover_only, force, provi
             debug_run_id=debug_run_id,
         )
         if resume_json is not None:
-            click.echo(f"  Priority: {resume_json.priority}/10 (1=apply now, 10=low priority) — {resume_json.priority_reasoning}")
+            click.echo(f"  Priority: {resume_json.priority}/10 — {resume_json.priority_reasoning}")
         click.echo(click.style(f"\n  Saved to: {folder}", fg="green"))
         return
 
-    # --- Sheet modes ---
-    from src.sheets import get_jobs, update_row
-    try:
-        all_jobs = get_jobs(config)
-    except Exception as e:
-        raise click.ClickException(f"Could not read Google Sheet: {e}")
-
-    if row_num is not None:
-        jobs_to_run = [j for j in all_jobs if j["row"] == row_num]
-        if not jobs_to_run:
-            raise click.ClickException(f"Row {row_num} not found in sheet.")
-        if jobs_to_run[0]["status"].strip() and not force:
-            click.echo(click.style(
-                f"  Row {row_num} already has status '{jobs_to_run[0]['status']}'. "
-                "Use --force to reprocess.", fg="yellow"
-            ))
-            return
-    elif run_all:
-        jobs_to_run = [j for j in all_jobs if not j["status"].strip() or force]
-    else:
-        raise click.UsageError("Provide --row N, --all, or --url <url>.")
-
-    if not jobs_to_run:
-        click.echo("No matching jobs to process.")
-        return
-
-    for job in jobs_to_run:
-        label = job.get("job_title") or job.get("url", "")
-        click.echo(f"\nProcessing row {job['row']}: {label}")
-        try:
-            debug_run_id = log_run(job.get("url", ""), resolved_provider, models[0], parser_models[0]) if debug else None
-            folder, job_data, resume_json = process_job(
-                job, config, resume, provider, models, parser_models,
-                resume_only=resume_only, cover_only=cover_only,
-                debug_run_id=debug_run_id,
-            )
-            click.echo(click.style(f"  Saved to: {folder}", fg="green"))
-
-            if resume_json is not None:
-                click.echo(f"  Priority: {resume_json.priority}/10 (1=apply now, 10=low priority) — {resume_json.priority_reasoning}")
-
-            # Write details, priority, reasoning, and status back to sheet in one request
-            updates = {"status": "Generated"}
-            if job_data.get("_scraped_fresh") and job_data.get("description"):
-                updates["details"] = job_data["description"]
-            if resume_json is not None:
-                updates["priority"] = str(resume_json.priority)
-                updates["reasoning"] = resume_json.priority_reasoning
-            update_row(config, job["row"], **updates)
-            click.echo("  Sheet updated.")
-        except Exception as e:
-            click.echo(click.style(f"  ERROR: {e}", fg="red"), err=True)
+    # --- Agent mode (default when no --url) ---
+    from src.agent import run_agent_chat
+    run_agent_chat(config=config, resume=resume, provider_name=resolved_provider)
 
 
 if __name__ == "__main__":

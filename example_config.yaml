@@ -2,9 +2,11 @@ google_sheets:
   spreadsheet_id: "your_google_spreadsheet_id_here"
   worksheet_name: "Sheet1"
   columns:
-    job_title: "Job Title"
+    job_title: "Title"
+    company: "Company"
     url: "URL"
     status: "Status"
+    date_found: "Date Found"
     details: "Details"
     priority: "Priority"
     reasoning: "Reasoning"
@@ -55,3 +57,8 @@ paths:
   resume_yaml: "resume.yaml"
   output_dir: "output"
   credentials: "credentials/google_service_account.json"
+
+agent:
+  max_jobs: 10        # max job listings surfaced per search session
+  memory_bank: ""     # defaults to resume basics.name if empty
+  memory_model: ""    # defaults to parser_model for your provider if empty

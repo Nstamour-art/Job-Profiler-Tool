@@ -62,3 +62,39 @@ def update_row(config: dict, row: int, **fields) -> None:
 def update_status(config: dict, row: int, status: str) -> None:
     """Convenience wrapper — write only the status column."""
     update_row(config, row, status=status)
+
+
+def append_job_row(
+    config: dict,
+    title: str,
+    company: str,
+    url: str,
+    status: str,
+    date_found: str,
+    priority: str = "",
+    reasoning: str = "",
+) -> None:
+    """Append a new job row to the sheet.
+
+    Aligns values to the sheet's header row. Skips any column not present in the sheet.
+    """
+    sheet = _open_sheet(config)
+    cols = config["google_sheets"]["columns"]
+    headers = sheet.row_values(1)
+
+    row = [""] * len(headers)
+    field_map = {
+        "job_title": title,
+        "company": company,
+        "url": url,
+        "status": status,
+        "date_found": date_found,
+        "priority": priority,
+        "reasoning": reasoning,
+    }
+    for field, value in field_map.items():
+        col_name = cols.get(field, "")
+        if col_name and col_name in headers:
+            row[headers.index(col_name)] = value
+
+    sheet.append_row(row)
