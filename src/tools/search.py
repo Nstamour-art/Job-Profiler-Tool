@@ -16,9 +16,9 @@ from src.prompts import SEARCH_SUBAGENT_SYSTEM_PROMPT
 
 def create_search_tool(agent_model, tavily_api_key: str, max_jobs: int = 10):
     """Return a search_jobs LangChain tool that uses a Tavily search sub-agent."""
-    from langchain_community.tools.tavily_search import TavilySearchResults
+    from langchain_tavily import TavilySearch
 
-    tavily = TavilySearchResults(max_results=30, tavily_api_key=tavily_api_key)
+    tavily = TavilySearch(max_results=30, tavily_api_key=tavily_api_key)
     system_prompt = SEARCH_SUBAGENT_SYSTEM_PROMPT.replace("{max_jobs}", str(max_jobs))
 
     @lc_tool

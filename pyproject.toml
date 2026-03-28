@@ -28,6 +28,7 @@ dependencies = [
     "langchain-google-genai>=0.1.0",
     "langchain-ollama>=0.1.0",
     "tavily-python>=0.3.0",
+    "langchain-tavily>=0.1.0",
     "hindsight-client>=0.4.0",
     "pytest>=8.0.0",
 ]
