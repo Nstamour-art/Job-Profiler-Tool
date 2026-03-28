@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import os
 import uuid
+from pathlib import Path
 
 from deepagents import create_deep_agent
 from langchain.chat_models import init_chat_model
 
 from src.memory import MemoryManager
+from src.onboarding import run_onboarding
 from src.prompts import AGENT_SYSTEM_PROMPT_TEMPLATE
 from src.providers import resolve_models, get_provider
 from src.tools.search import create_search_tool
@@ -69,8 +71,20 @@ def build_agent(config: dict, resume: dict, provider_name: str, recalled_memorie
     )
 
 
-def run_agent_chat(config: dict, resume: dict, provider_name: str) -> None:
-    """Start the interactive chat loop with the job search agent."""
+def run_agent_chat(config: dict, provider_name: str) -> None:
+    """Start the interactive chat loop with the job search agent.
+
+    If resume.yaml does not exist, runs the onboarding interview first.
+    """
+    import yaml as _yaml
+
+    resume_path = config["paths"]["resume_yaml"]
+    if not Path(resume_path).exists():
+        resume = run_onboarding(config, provider_name)
+    else:
+        with open(resume_path, encoding="utf-8") as f:
+            resume = _yaml.safe_load(f)
+
     memory = MemoryManager(config=config, resume=resume, provider_name=provider_name)
     memory.start()
 

@@ -90,14 +90,14 @@ def run_jobs(direct_url, resume_only, cover_only, provider_name, config_path, de
     if resume_only and cover_only:
         raise click.UsageError("Cannot use --resume-only and --cover-only together.")
 
-    config  = load_config(config_path)
-    resume  = load_resume(config["paths"]["resume_yaml"])
+    config = load_config(config_path)
 
     from src.providers import get_provider, resolve_models
     resolved_provider = provider_name or "local"
 
     # --- Direct URL mode (existing pipeline, unchanged) ---
     if direct_url:
+        resume = load_resume(config["paths"]["resume_yaml"])
         llm_cfg = config["llm"]
         provider = get_provider(resolved_provider, llm_cfg)
         models, parser_models = resolve_models(resolved_provider, llm_cfg)
@@ -124,7 +124,7 @@ def run_jobs(direct_url, resume_only, cover_only, provider_name, config_path, de
 
     # --- Agent mode (default when no --url) ---
     from src.agent import run_agent_chat
-    run_agent_chat(config=config, resume=resume, provider_name=resolved_provider)
+    run_agent_chat(config=config, provider_name=resolved_provider)
 
 
 if __name__ == "__main__":
