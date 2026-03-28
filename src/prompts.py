@@ -186,3 +186,114 @@ GENERATION_SUBAGENT_SYSTEM_PROMPT = """\
 You are a document generation assistant. Call the available tools to generate a
 tailored resume and cover letter for the given job URL, then report the result.
 """
+
+# ---------------------------------------------------------------------------
+# Resume onboarding extraction prompts — one system prompt per section.
+# Each is passed as `system` to parser_model via _call_with_retry.
+# The user's raw input (typed or pasted) is passed as the `prompt` parameter.
+# ---------------------------------------------------------------------------
+
+ONBOARDING_EXTRACT_BASICS = """\
+Extract contact and profile information from the text below.
+Return ONLY valid JSON matching this schema exactly:
+{
+  "name": "string",
+  "email": "string",
+  "phone": "string",
+  "summary": "string",
+  "location": {"city": "string", "region": "string", "countryCode": "string"},
+  "profiles": [{"network": "string", "username": "string", "url": "string"}]
+}
+Leave fields as empty strings or empty lists if the information is not present. Do NOT hallucinate.
+"""
+
+ONBOARDING_EXTRACT_WORK = """\
+Extract all work experience entries from the text below.
+Return ONLY valid JSON matching this schema exactly:
+{
+  "work": [
+    {
+      "name": "string (company name)",
+      "location": "string",
+      "position": "string (job title)",
+      "description": "string (paragraph summary of the role; empty string if not available)",
+      "startDate": "string (year or YYYY-MM)",
+      "endDate": "string (year, YYYY-MM, or empty string if current role)",
+      "highlights": ["string (achievement or responsibility bullet)"]
+    }
+  ]
+}
+Leave endDate as empty string for current roles. Do NOT hallucinate details not present.
+"""
+
+ONBOARDING_EXTRACT_EDUCATION = """\
+Extract all education entries from the text below.
+Return ONLY valid JSON matching this schema exactly:
+{
+  "education": [
+    {
+      "institution": "string",
+      "area": "string (field of study)",
+      "studyType": "string (e.g. BSc, MSc, PhD, Diploma)",
+      "degree": "string (full degree name)",
+      "description": "string (optional notes; empty string if not available)",
+      "startDate": "string (year)",
+      "endDate": "string (year)"
+    }
+  ]
+}
+Do NOT hallucinate. Leave fields as empty strings if not present.
+"""
+
+ONBOARDING_EXTRACT_SKILLS = """\
+Extract skills from the text below, organized into named categories.
+Return ONLY valid JSON matching this schema exactly:
+{
+  "skills": [
+    {
+      "name": "string (category name, e.g. 'Programming Languages', 'Cloud & DevOps')",
+      "keywords": ["string"]
+    }
+  ]
+}
+Group related skills into logical categories. Do NOT hallucinate skills not mentioned in the text.
+"""
+
+ONBOARDING_EXTRACT_PROJECTS = """\
+Extract portfolio or personal project entries from the text below.
+Return ONLY valid JSON matching this schema exactly:
+{
+  "projects": [
+    {
+      "name": "string",
+      "description": "string (one-line summary of the project)",
+      "url": "string (GitHub or live URL; empty string if not mentioned)",
+      "highlights": ["string (feature or achievement bullet)"]
+    }
+  ]
+}
+Do NOT hallucinate. Leave url as empty string if not mentioned.
+"""
+
+ONBOARDING_EXTRACT_CERTIFICATES = """\
+Extract certifications, courses, or credentials from the text below.
+Return ONLY valid JSON matching this schema exactly:
+{
+  "certificates": [
+    {
+      "name": "string (certification or course name)",
+      "issuer": "string (issuing organization; empty string if not mentioned)"
+    }
+  ]
+}
+Do NOT hallucinate. Leave issuer as empty string if not mentioned.
+"""
+
+ONBOARDING_SECTION_PROMPTS: dict[str, str] = {
+    "basics":       ONBOARDING_EXTRACT_BASICS,
+    "work":         ONBOARDING_EXTRACT_WORK,
+    "education":    ONBOARDING_EXTRACT_EDUCATION,
+    "skills":       ONBOARDING_EXTRACT_SKILLS,
+    "projects":     ONBOARDING_EXTRACT_PROJECTS,
+    "certificates": ONBOARDING_EXTRACT_CERTIFICATES,
+}
