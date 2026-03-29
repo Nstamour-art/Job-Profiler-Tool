@@ -17,8 +17,8 @@ def _parse_llm_response(model_class: Type[T], raw: str) -> T:
         return model_class.model_validate_json(raw)
     except (ValidationError, json.JSONDecodeError):
         pass
-    repaired, _ = json_repair.repair_json(raw)
-    return model_class.model_validate_json(json.dumps(repaired))
+    repaired = json_repair.repair_json(raw, return_objects=True)
+    return model_class.model_validate(repaired)
 
 
 def _call_with_retry(
