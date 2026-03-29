@@ -105,3 +105,21 @@ def test_wizard_extraction_failure_falls_back_to_base(sample_config, tmp_path):
 
     assert result.name == "classic"
     assert result.body_pt == CLASSIC.body_pt
+
+
+def test_wizard_saves_english_color_name_not_rgb(sample_config, tmp_path):
+    template_path = str(tmp_path / "template.yaml")
+    sample_config["paths"]["template_yaml"] = template_path
+
+    from src.themes import TemplateOverrides
+    mock_overrides = TemplateOverrides(accent_color="navy")
+
+    with patch("src.template_agent.get_provider", return_value=MagicMock()), \
+         patch("src.template_agent.resolve_models", return_value=(["m"], ["m"])), \
+         patch("src.template_agent._extract_overrides", return_value=mock_overrides), \
+         patch("builtins.input", side_effect=["1", "navy accent", "yes"]):
+        from src.template_agent import run_template_wizard
+        run_template_wizard(sample_config, "local")
+
+    saved = yaml.safe_load(open(template_path, encoding="utf-8"))
+    assert saved["overrides"]["accent_color"] == "navy"  # string, not RGB list

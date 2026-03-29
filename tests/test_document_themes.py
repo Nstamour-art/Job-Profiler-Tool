@@ -83,3 +83,13 @@ def test_build_resume_default_theme_is_classic(tmp_path, sample_resume_json, sam
     out = str(tmp_path / "resume_default.docx")
     build_resume(sample_resume_json, sample_personal, [], out)
     assert os.path.exists(out)
+
+
+def test_build_resume_modern_uses_calibri(tmp_path, sample_resume_json, sample_personal):
+    from src.document import build_resume
+    out = str(tmp_path / "resume_modern_font.docx")
+    build_resume(sample_resume_json, sample_personal, [], out, theme=MODERN)
+    doc = DocxDocument(out)
+    # Check that at least one run uses Calibri
+    fonts_used = {run.font.name for para in doc.paragraphs for run in para.runs if run.font.name}
+    assert "Calibri" in fonts_used

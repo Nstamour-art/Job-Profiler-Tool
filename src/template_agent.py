@@ -94,9 +94,11 @@ def run_template_wizard(config: dict, provider_name: str) -> ThemeConfig:
         "\nAnything to customize? (font name, size, accent color — or press Enter for defaults)\n> "
     ).strip()
 
+    raw_accent_color: str = ""
     if raw_custom:
         try:
             overrides = _extract_overrides(theme_name, raw_custom, provider, parser_models, llm_cfg)
+            raw_accent_color = overrides.accent_color or ""
             base = merge_overrides(base, overrides)
             if overrides.font:
                 customizations.append(f"font: {overrides.font}")
@@ -117,6 +119,7 @@ def run_template_wizard(config: dict, provider_name: str) -> ThemeConfig:
             break
         elif response == "skip":
             base = PRESETS[theme_name]
+            raw_accent_color = ""
             customizations = []
             break
         elif response == "edit":
@@ -128,6 +131,7 @@ def run_template_wizard(config: dict, provider_name: str) -> ThemeConfig:
             )
             try:
                 overrides = _extract_overrides(theme_name, combined, provider, parser_models, llm_cfg)
+                raw_accent_color = overrides.accent_color or ""
                 base = merge_overrides(PRESETS[theme_name], overrides)
                 customizations = []
                 if overrides.font:
@@ -153,8 +157,8 @@ def run_template_wizard(config: dict, provider_name: str) -> ThemeConfig:
         saved_overrides["body_pt"] = base.body_pt
     if base.heading_pt != base_preset.heading_pt:
         saved_overrides["heading_pt"] = base.heading_pt
-    if base.accent_color != base_preset.accent_color:
-        saved_overrides["accent_color"] = base.accent_color
+    if raw_accent_color:
+        saved_overrides["accent_color"] = raw_accent_color
 
     with open(template_path, "w", encoding="utf-8") as f:
         yaml.dump({"theme": base.name, "overrides": saved_overrides}, f, allow_unicode=True)
