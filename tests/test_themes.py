@@ -59,10 +59,10 @@ def test_merge_overrides_applies_accent_color_by_name():
     assert result.accent_color == [0, 100, 0]
 
 
-def test_merge_overrides_skips_zero_body_pt():
-    overrides = TemplateOverrides(body_pt=0)
+def test_merge_overrides_skips_none_body_pt():
+    overrides = TemplateOverrides(body_pt=None)
     result = merge_overrides(MODERN, overrides)
-    assert result.body_pt == MODERN.body_pt  # not overridden
+    assert result.body_pt == MODERN.body_pt
 
 
 def test_merge_overrides_skips_empty_font():
@@ -96,5 +96,16 @@ def test_theme_config_model_validate_from_dict():
 def test_template_overrides_all_defaults_empty():
     o = TemplateOverrides()
     assert o.font == ""
-    assert o.body_pt == 0
+    assert o.body_pt is None
     assert o.accent_color == ""
+
+
+def test_merge_overrides_unknown_accent_color_falls_back_to_base():
+    overrides = TemplateOverrides(accent_color="electric chartreuse")
+    result = merge_overrides(MODERN, overrides)
+    assert result.accent_color == MODERN.accent_color
+
+
+def test_theme_config_rejects_invalid_rgb():
+    with pytest.raises(Exception):
+        ThemeConfig(accent_color=[300, 0, 0])

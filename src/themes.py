@@ -7,7 +7,8 @@ resolve_color maps English color names to RGB lists.
 """
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Optional
+from pydantic import BaseModel, Field, field_validator
 
 
 class ThemeConfig(BaseModel):
@@ -27,13 +28,20 @@ class ThemeConfig(BaseModel):
     heading_underline: bool = False
     name_align: str = "center"         # "center" | "left"
 
+    @field_validator("accent_color", "sidebar_color")
+    @classmethod
+    def _validate_rgb(cls, v: list[int]) -> list[int]:
+        if len(v) != 3 or not all(0 <= c <= 255 for c in v):
+            raise ValueError(f"RGB must be a list of 3 integers in [0, 255], got {v}")
+        return v
+
 
 class TemplateOverrides(BaseModel):
-    """Fields extracted from natural language. Empty/zero means not mentioned."""
+    """Fields extracted from natural language. None/empty means not mentioned."""
     font: str = ""
-    body_pt: float = 0
-    heading_pt: float = 0
-    name_pt: float = 0
+    body_pt: Optional[float] = None
+    heading_pt: Optional[float] = None
+    name_pt: Optional[float] = None
     accent_color: str = ""             # English color name, resolved to RGB after extraction
 
 
@@ -128,11 +136,11 @@ def merge_overrides(base: ThemeConfig, overrides: TemplateOverrides) -> ThemeCon
     data = base.model_dump()
     if overrides.font:
         data["font"] = overrides.font
-    if overrides.body_pt:
+    if overrides.body_pt is not None:
         data["body_pt"] = overrides.body_pt
-    if overrides.heading_pt:
+    if overrides.heading_pt is not None:
         data["heading_pt"] = overrides.heading_pt
-    if overrides.name_pt:
+    if overrides.name_pt is not None:
         data["name_pt"] = overrides.name_pt
     if overrides.accent_color:
         data["accent_color"] = resolve_color(overrides.accent_color, base.accent_color)
