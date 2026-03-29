@@ -1,3 +1,5 @@
+provider: "local"   # default provider — set by setup wizard, overridden by --provider flag
+
 google_sheets:
   spreadsheet_id: "your_google_spreadsheet_id_here"
   worksheet_name: "Sheet1"
