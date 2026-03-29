@@ -13,6 +13,7 @@ from __future__ import annotations
 import click
 import yaml
 from dotenv import load_dotenv
+from src.template_agent import run_template_wizard
 
 load_dotenv()
 
@@ -61,6 +62,18 @@ def list_jobs(config_path):
         click.echo(f"{j['row']:<5} {j['status']:<12} {j['job_title'][:28]:<30} {j['url'][:50]}")
 
 
+@cli.command("template")
+@click.option("--provider", "provider_name", default=None,
+              type=click.Choice(["local", "cloud", "openai", "anthropic", "gemini"]),
+              help="LLM provider to use for customization extraction.")
+@click.option("--config", "config_path", default="config.yaml", show_default=True)
+def set_template(provider_name, config_path):
+    """Interactively choose and customize your resume template."""
+    config = load_config(config_path)
+    resolved_provider = provider_name or "local"
+    run_template_wizard(config, resolved_provider)
+
+
 @cli.command("run")
 @click.option("--url", "direct_url", default=None,
               help="Process a single job URL directly (bypasses agent).")
@@ -91,6 +104,8 @@ def run_jobs(direct_url, resume_only, cover_only, provider_name, config_path, de
         raise click.UsageError("Cannot use --resume-only and --cover-only together.")
 
     config  = load_config(config_path)
+    if "template_yaml" not in config.get("paths", {}):
+        config.setdefault("paths", {})["template_yaml"] = "template.yaml"
     resume  = load_resume(config["paths"]["resume_yaml"])
 
     from src.providers import get_provider, resolve_models
