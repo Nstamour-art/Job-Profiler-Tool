@@ -85,3 +85,85 @@ def test_ensure_provider_ready_gemini_missing_key_calls_prompt(monkeypatch):
         from src.setup_wizard import ensure_provider_ready
         ensure_provider_ready("gemini", {})
         mock_prompt.assert_called_once_with("gemini", "GEMINI_API_KEY", ".env")
+
+
+# ---------------------------------------------------------------------------
+# run_setup_wizard
+# ---------------------------------------------------------------------------
+
+import yaml
+
+
+def test_run_setup_wizard_local_writes_config(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    env_path = tmp_path / ".env"
+    inputs = ["1", "no"]  # select local, skip google sheets
+    with patch("src.setup_wizard._ollama_reachable", return_value=True), \
+         patch("builtins.input", side_effect=inputs):
+        from src.setup_wizard import run_setup_wizard
+        result = run_setup_wizard(str(config_path), str(env_path))
+    assert result["provider"] == "local"
+    saved = yaml.safe_load(config_path.read_text())
+    assert saved["provider"] == "local"
+    assert "llm" in saved
+    assert "paths" in saved
+
+
+def test_run_setup_wizard_gemini_prompts_for_key(tmp_path, monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    config_path = tmp_path / "config.yaml"
+    env_path = tmp_path / ".env"
+    inputs = ["4", "no"]  # select gemini, skip google sheets
+    with patch("builtins.input", side_effect=inputs), \
+         patch("src.setup_wizard._prompt_for_api_key", return_value="test-key") as mock_prompt:
+        from src.setup_wizard import run_setup_wizard
+        result = run_setup_wizard(str(config_path), str(env_path))
+    assert result["provider"] == "gemini"
+    mock_prompt.assert_called_once_with("gemini", "GEMINI_API_KEY", str(env_path))
+
+
+def test_run_setup_wizard_invalid_choice_loops(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    env_path = tmp_path / ".env"
+    inputs = ["9", "x", "2", "no"]  # two bad choices, then openai, skip sheets
+    with patch("builtins.input", side_effect=inputs), \
+         patch("src.setup_wizard._prompt_for_api_key", return_value="sk-test"):
+        from src.setup_wizard import run_setup_wizard
+        result = run_setup_wizard(str(config_path), str(env_path))
+    assert result["provider"] == "openai"
+
+
+def test_run_setup_wizard_google_sheets_yes(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    env_path = tmp_path / ".env"
+    # local, sheets=yes, spreadsheet id, worksheet name, default creds path (Enter)
+    inputs = ["1", "yes", "abc123spreadsheetid", "Jobs", ""]
+    with patch("src.setup_wizard._ollama_reachable", return_value=True), \
+         patch("builtins.input", side_effect=inputs):
+        from src.setup_wizard import run_setup_wizard
+        result = run_setup_wizard(str(config_path), str(env_path))
+    assert result["google_sheets"]["spreadsheet_id"] == "abc123spreadsheetid"
+    assert result["google_sheets"]["worksheet_name"] == "Jobs"
+    assert "columns" in result["google_sheets"]
+
+
+def test_run_setup_wizard_google_sheets_no(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    env_path = tmp_path / ".env"
+    inputs = ["1", "no"]
+    with patch("src.setup_wizard._ollama_reachable", return_value=True), \
+         patch("builtins.input", side_effect=inputs):
+        from src.setup_wizard import run_setup_wizard
+        result = run_setup_wizard(str(config_path), str(env_path))
+    assert "google_sheets" not in result
+
+
+def test_run_setup_wizard_google_sheets_default_worksheet(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    env_path = tmp_path / ".env"
+    inputs = ["1", "yes", "sheetid", "", ""]  # Enter = default worksheet "Sheet1"
+    with patch("src.setup_wizard._ollama_reachable", return_value=True), \
+         patch("builtins.input", side_effect=inputs):
+        from src.setup_wizard import run_setup_wizard
+        result = run_setup_wizard(str(config_path), str(env_path))
+    assert result["google_sheets"]["worksheet_name"] == "Sheet1"

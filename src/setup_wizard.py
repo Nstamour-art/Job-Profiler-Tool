@@ -93,3 +93,129 @@ def ensure_provider_ready(
         if not os.environ.get(key_var, "").strip():
             print(f"\n  {provider_name.capitalize()} API key not found.")
             _prompt_for_api_key(provider_name, key_var, env_path)
+
+
+def _build_config(provider: str, sheets: dict | None) -> dict:
+    """Return a complete config dict for the given provider and optional sheets config."""
+    cfg: dict = {
+        "provider": provider,
+        "llm": {
+            "temperature": 0.3,
+            "max_retries": 3,
+            "model": "llama3.2:latest",
+            "parser_model": "llama3.2:latest",
+            "cloud": {
+                "host": "https://ollama.com",
+                "model": "gpt-oss:120b",
+                "fallback_models": [],
+                "parser_model": "nemotron-3-nano:30b",
+                "parser_fallback_models": [],
+            },
+            "openai": {
+                "model": "gpt-4o",
+                "fallback_models": ["gpt-4o-mini"],
+                "parser_model": "gpt-4o-mini",
+                "parser_fallback_models": [],
+            },
+            "anthropic": {
+                "model": "claude-opus-4-6",
+                "fallback_models": ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+                "parser_model": "claude-haiku-4-5-20251001",
+                "parser_fallback_models": [],
+            },
+            "gemini": {
+                "model": "gemini-2.5-pro-preview-03-25",
+                "fallback_models": ["gemini-2.0-flash", "gemini-2.0-flash-lite"],
+                "parser_model": "gemini-2.0-flash",
+                "parser_fallback_models": ["gemini-2.0-flash-lite"],
+            },
+        },
+        "paths": {
+            "resume_yaml": "resume.yaml",
+            "template_yaml": "template.yaml",
+            "output_dir": "output",
+            "credentials": "credentials/google_service_account.json",
+        },
+        "agent": {
+            "max_jobs": 10,
+            "memory_bank": "",
+            "memory_model": "",
+        },
+    }
+    if sheets:
+        cfg["google_sheets"] = sheets
+    return cfg
+
+
+def run_setup_wizard(
+    config_path: str = "config.yaml", env_path: str = ".env"
+) -> dict:
+    """Run the interactive first-run setup wizard. Returns the completed config dict."""
+    print("\nWelcome to Job Profiler Tool!")
+    print("Let's get you set up. This will only take a couple of minutes.\n")
+
+    # --- Provider selection ---
+    while True:
+        choice = input(_PROVIDER_MENU).strip()
+        if choice in ("1", "2", "3", "4", "5"):
+            provider = _PROVIDER_NAMES[int(choice) - 1]
+            break
+        print("  Please enter a number from 1 to 5.")
+
+    # --- Provider-specific setup ---
+    if provider == "local":
+        if _ollama_reachable():
+            print("\n  Ollama is running.")
+        else:
+            print("\n  Ollama doesn't appear to be running.")
+            print("  Install it from https://ollama.com, then re-run this tool.")
+            input("\n  Press Enter to choose a different provider, or Ctrl+C to exit.\n> ")
+            return run_setup_wizard(config_path, env_path)
+    else:
+        key_var = _API_KEY_VARS[provider]
+        if not os.environ.get(key_var, "").strip():
+            _prompt_for_api_key(provider, key_var, env_path)
+
+    # --- Google Sheets (optional) ---
+    sheets: dict | None = None
+    use_sheets = input(
+        "\nDo you want to track jobs in a Google Sheet? (yes / no)\n> "
+    ).strip().lower()
+    if use_sheets == "yes":
+        spreadsheet_id = input(
+            "\n  Spreadsheet ID (from the URL of your Google Sheet):\n> "
+        ).strip()
+        worksheet = (
+            input("  Worksheet name (press Enter for 'Sheet1'):\n> ").strip() or "Sheet1"
+        )
+        creds_path = (
+            input(
+                "  Path to service account JSON (press Enter for default):\n> "
+            ).strip()
+            or "credentials/google_service_account.json"
+        )
+        sheets = {
+            "spreadsheet_id": spreadsheet_id,
+            "worksheet_name": worksheet,
+            "columns": {
+                "job_title": "Title",
+                "company": "Company",
+                "url": "URL",
+                "status": "Status",
+                "date_found": "Date Found",
+                "details": "Details",
+                "priority": "Priority",
+                "reasoning": "Reasoning",
+            },
+        }
+        if creds_path != "credentials/google_service_account.json":
+            _append_env("GOOGLE_CREDENTIALS_PATH", creds_path, env_path)
+
+    # --- Write config.yaml ---
+    config = _build_config(provider, sheets)
+    Path(config_path).parent.mkdir(parents=True, exist_ok=True)
+    with open(config_path, "w", encoding="utf-8") as f:
+        yaml.dump(config, f, allow_unicode=True, default_flow_style=False)
+
+    print(f"\n  config.yaml created. Provider: {provider.capitalize()}\n")
+    return config
