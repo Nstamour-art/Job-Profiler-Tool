@@ -140,6 +140,8 @@ TOOLS AVAILABLE:
   YOU MUST show the candidate exactly what you are about to write and receive
   explicit confirmation ("yes") before calling this tool. Never write without confirmation.
 - log_job_to_sheet: Log a found job to the candidate's Google Sheet.
+- change_template: Let the user pick a new resume template and customize it.
+  Call this when the user asks to change their resume look, theme, or template.
 
 WORKFLOW:
 1. Greet the candidate and ask what roles they are targeting.
@@ -147,7 +149,8 @@ WORKFLOW:
 3. Call search_jobs with a preferences summary, then log each found job to the sheet.
 4. Present the results as a numbered list. Ask which jobs to generate documents for.
 5. Call generate_documents for each confirmed job.
-6. Offer to update the resume if the candidate mentions new skills or certifications.
+6. If the candidate asks to change their template, call change_template immediately.
+7. Offer to update the resume if the candidate mentions new skills or certifications.
 
 RULES:
 - Never generate documents without explicit job selection from the candidate.
@@ -187,113 +190,22 @@ You are a document generation assistant. Call the available tools to generate a
 tailored resume and cover letter for the given job URL, then report the result.
 """
 
-# ---------------------------------------------------------------------------
-# Resume onboarding extraction prompts — one system prompt per section.
-# Each is passed as `system` to parser_model via _call_with_retry.
-# The user's raw input (typed or pasted) is passed as the `prompt` parameter.
-# ---------------------------------------------------------------------------
-
-ONBOARDING_EXTRACT_BASICS = """\
-Extract contact and profile information from the text below.
-Return ONLY valid JSON matching this schema exactly:
-{
-  "name": "string",
-  "email": "string",
-  "phone": "string",
-  "summary": "string",
-  "location": {"city": "string", "region": "string", "countryCode": "string"},
-  "profiles": [{"network": "string", "username": "string", "url": "string"}]
-}
-Leave fields as empty strings or empty lists if the information is not present. Do NOT hallucinate.
+TEMPLATE_EXTRACT_OVERRIDES = """\
+The user has chosen the {theme} resume template and wants to customize it.
+Extract any font name, font size, or color preferences from their message.
+Return JSON only — no markdown, no explanation — matching this exact schema:
+{{
+  "font": "",
+  "body_pt": null,
+  "heading_pt": null,
+  "name_pt": null,
+  "accent_color": ""
+}}
+Rules:
+- "font": font family name string, e.g. "Calibri" — empty string if not mentioned
+- "body_pt": body text size in points as a number, e.g. 12 — null if not mentioned
+- "heading_pt": heading size in points — null if not mentioned
+- "name_pt": name header size in points — null if not mentioned
+- "accent_color": plain English color name, e.g. "dark green" — empty string if not mentioned
+Do NOT hallucinate values. Leave fields at their null/empty default if not mentioned.
 """
-
-ONBOARDING_EXTRACT_WORK = """\
-Extract all work experience entries from the text below.
-Return ONLY valid JSON matching this schema exactly:
-{
-  "work": [
-    {
-      "name": "string (company name)",
-      "location": "string",
-      "position": "string (job title)",
-      "description": "string (paragraph summary of the role; empty string if not available)",
-      "startDate": "string (year or YYYY-MM)",
-      "endDate": "string (year, YYYY-MM, or empty string if current role)",
-      "highlights": ["string (achievement or responsibility bullet)"]
-    }
-  ]
-}
-Leave endDate as empty string for current roles. Do NOT hallucinate details not present.
-"""
-
-ONBOARDING_EXTRACT_EDUCATION = """\
-Extract all education entries from the text below.
-Return ONLY valid JSON matching this schema exactly:
-{
-  "education": [
-    {
-      "institution": "string",
-      "area": "string (field of study)",
-      "studyType": "string (e.g. BSc, MSc, PhD, Diploma)",
-      "degree": "string (full degree name)",
-      "description": "string (optional notes; empty string if not available)",
-      "startDate": "string (year)",
-      "endDate": "string (year)"
-    }
-  ]
-}
-Do NOT hallucinate. Leave fields as empty strings if not present.
-"""
-
-ONBOARDING_EXTRACT_SKILLS = """\
-Extract skills from the text below, organized into named categories.
-Return ONLY valid JSON matching this schema exactly:
-{
-  "skills": [
-    {
-      "name": "string (category name, e.g. 'Programming Languages', 'Cloud & DevOps')",
-      "keywords": ["string"]
-    }
-  ]
-}
-Group related skills into logical categories. Do NOT hallucinate skills not mentioned in the text.
-"""
-
-ONBOARDING_EXTRACT_PROJECTS = """\
-Extract portfolio or personal project entries from the text below.
-Return ONLY valid JSON matching this schema exactly:
-{
-  "projects": [
-    {
-      "name": "string",
-      "description": "string (one-line summary of the project)",
-      "url": "string (GitHub or live URL; empty string if not mentioned)",
-      "highlights": ["string (feature or achievement bullet)"]
-    }
-  ]
-}
-Do NOT hallucinate. Leave url as empty string if not mentioned.
-"""
-
-ONBOARDING_EXTRACT_CERTIFICATES = """\
-Extract certifications, courses, or credentials from the text below.
-Return ONLY valid JSON matching this schema exactly:
-{
-  "certificates": [
-    {
-      "name": "string (certification or course name)",
-      "issuer": "string (issuing organization; empty string if not mentioned)"
-    }
-  ]
-}
-Do NOT hallucinate. Leave issuer as empty string if not mentioned.
-"""
-
-ONBOARDING_SECTION_PROMPTS: dict[str, str] = {
-    "basics":       ONBOARDING_EXTRACT_BASICS,
-    "work":         ONBOARDING_EXTRACT_WORK,
-    "education":    ONBOARDING_EXTRACT_EDUCATION,
-    "skills":       ONBOARDING_EXTRACT_SKILLS,
-    "projects":     ONBOARDING_EXTRACT_PROJECTS,
-    "certificates": ONBOARDING_EXTRACT_CERTIFICATES,
-}

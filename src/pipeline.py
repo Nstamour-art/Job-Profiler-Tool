@@ -11,11 +11,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import click
+import yaml as _yaml
 
 from src.scraper import scrape_job, ScraperError
 from src.llm import parse_job_description, generate_resume, generate_cover_letter
 from src.document import build_resume, build_cover_letter
 from src.debug import log_scraped, log_job_details, log_resume, log_cover_letter, log_output_folder
+from src.themes import ThemeConfig, CLASSIC, PRESETS, merge_overrides, TemplateOverrides
 
 if TYPE_CHECKING:
     from src.models import ResumeJSON
@@ -41,6 +43,24 @@ def _safe_name(text: str) -> str:
     """Slugify a string for use in a directory name."""
     text = re.sub(r"[^\w\s\-]", "", text)
     return re.sub(r"\s+", "_", text).strip("_")[:40]
+
+
+def _load_theme(template_path: str) -> ThemeConfig:
+    """Load ThemeConfig from template.yaml. Returns CLASSIC if file missing or invalid."""
+    try:
+        with open(template_path, encoding="utf-8") as f:
+            raw = _yaml.safe_load(f) or {}
+        theme_name = raw.get("theme", "classic")
+        base = PRESETS.get(theme_name, CLASSIC)
+        overrides_raw = raw.get("overrides", {})
+        if overrides_raw:
+            overrides = TemplateOverrides.model_validate(overrides_raw)
+            return merge_overrides(base, overrides)
+        return base
+    except FileNotFoundError:
+        return CLASSIC
+    except Exception:
+        return CLASSIC
 
 
 def process_job(
@@ -109,6 +129,9 @@ def process_job(
         if cover_json is not None:
             log_cover_letter(debug_run_id, cover_json)
 
+    template_path = config.get("paths", {}).get("template_yaml", "template.yaml")
+    theme = _load_theme(template_path)
+
     today_str = date.today().isoformat()
     folder = Path(config["paths"]["output_dir"]) / f"{_safe_name(company)}_{_safe_name(title)}_{today_str}"
     folder.mkdir(parents=True, exist_ok=True)
@@ -127,6 +150,7 @@ def process_job(
             personal=resume["basics"],
             education=resume.get("education", []),
             output_path=resume_path,
+            theme=theme,
         )
 
     if not resume_only and cover_json is not None:
@@ -138,6 +162,7 @@ def process_job(
             company=company,
             job_title=title,
             output_path=cover_path,
+            theme=theme,
         )
 
     return str(folder), job_data, resume_json

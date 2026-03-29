@@ -18,10 +18,29 @@ from src.memory import MemoryManager
 from src.onboarding import run_onboarding
 from src.prompts import AGENT_SYSTEM_PROMPT_TEMPLATE
 from src.providers import resolve_models, get_provider
+from src.template_agent import run_template_wizard
 from src.tools.search import create_search_tool
 from src.tools.generate import create_generate_tool
 from src.tools.resume_editor import create_resume_tools
 from src.tools.sheet_log import create_sheet_log_tool
+
+
+def _create_change_template_tool(config: dict, provider_name: str):
+    from langchain_core.tools import tool as lc_tool
+
+    @lc_tool
+    def change_template() -> str:
+        """Let the user interactively choose a new resume template.
+        Call this when the user says they want to change their template,
+        switch themes, or update the look of their resume documents.
+        """
+        try:
+            theme = run_template_wizard(config, provider_name)
+            return f"Template updated to {theme.name.capitalize()}."
+        except Exception as exc:
+            return f"Template change failed: {exc}"
+
+    return change_template
 
 
 _LANGCHAIN_PREFIX: dict[str, str] = {
@@ -57,6 +76,7 @@ def build_agent(config: dict, resume: dict, provider_name: str, recalled_memorie
     generate_tool = create_generate_tool(config, resume, provider, models, parser_models)
     read_resume, write_resume = create_resume_tools(config["paths"]["resume_yaml"])
     sheet_log_tool = create_sheet_log_tool(config)
+    change_template_tool = _create_change_template_tool(config, provider_name)
 
     system_prompt = AGENT_SYSTEM_PROMPT_TEMPLATE.format(
         candidate_name=resume["basics"]["name"],
@@ -66,7 +86,8 @@ def build_agent(config: dict, resume: dict, provider_name: str, recalled_memorie
 
     return create_deep_agent(
         model=agent_model,
-        tools=[search_tool, generate_tool, read_resume, write_resume, sheet_log_tool],
+        tools=[search_tool, generate_tool, read_resume, write_resume,
+               sheet_log_tool, change_template_tool],
         system_prompt=system_prompt,
     )
 

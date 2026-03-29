@@ -161,7 +161,50 @@ agent:
 
 **`agent.max_jobs`** caps how many job listings the agent surfaces per session.
 
-### 5. Run the tool
+## Resume Templates
+
+The tool ships with four named themes. Your choice is saved to `template.yaml` and applied to every document generated after that.
+
+| Theme | Font | Style |
+| --- | --- | --- |
+| **Classic** | Arial | Black on white, centered name, ruled section borders |
+| **Modern** | Calibri | Navy accent, left-aligned name, underlined headings |
+| **Creative** | Georgia | Dark sidebar with contact/skills/education, main column for experience |
+| **Minimal** | Helvetica Neue | No borders, grey section labels, generous margins |
+
+> **Note:** The Creative theme uses a two-column sidebar layout. Most modern ATS systems handle it fine, but some older ones may misread the columns — the tool prints a warning when you select it.
+
+### Set or change your template
+
+```bash
+# Interactive wizard — pick a theme and optionally customize it in natural language
+uv run python main.py template
+
+# Use a specific LLM provider for the customization extraction step
+uv run python main.py template --provider anthropic
+```
+
+The wizard lets you describe customizations in plain language after picking a theme:
+
+```text
+Choose a resume template:
+
+  1. Classic   — Arial, black on white, centered headings with ruled borders
+  2. Modern    — Calibri, navy accent, left-aligned name, underlined headings
+  3. Creative  — Georgia serif, dark sidebar layout
+  4. Minimal   — Helvetica Neue, no borders, grey section labels, generous margins
+
+Enter 1–4: 2
+
+Anything to customize? (font name, size, accent color — or press Enter for defaults)
+> 12pt body text and dark green accent
+```
+
+Your selection is saved to `template.yaml` (gitignored). You can re-run `template` at any time to switch themes. In agent mode, just tell the agent you want to change your template and it will launch the wizard for you.
+
+---
+
+## Usage
 
 ```bash
 # Start an agent job search session (local Ollama)
@@ -202,6 +245,10 @@ Output files are saved to `output/<Company>_<Role>_<date>/`.
 
 | Flag | Description |
 | --- | --- |
+| `--url <url>` | Process a single job URL directly, no Google Sheet needed |
+| `template` | Interactively choose and customize your resume template |
+| `--row <n>` | Process a specific row number from the Google Sheet |
+| `--all` | Process all rows where Status is blank |
 | `--url <url>` | Process a single job URL directly (skips agent loop) |
 | `--provider` | LLM backend: `local` (default), `cloud`, `openai`, `anthropic`, `gemini` |
 | `--resume-only` | Generate only the resume, skip the cover letter |
