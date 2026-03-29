@@ -36,7 +36,8 @@ def _extract_overrides(
     llm_cfg: dict,
 ) -> TemplateOverrides:
     system = TEMPLATE_EXTRACT_OVERRIDES.format(theme=theme_name)
-    return _call_with_retry(TemplateOverrides, provider, llm_cfg, system, raw, parser_models)
+    prompt = f'User customization request: "{raw}"\n\nExtract any font name, font size, or color preferences from the above request and return the JSON object.'
+    return _call_with_retry(TemplateOverrides, provider, llm_cfg, system, prompt, parser_models)
 
 
 def _format_confirmation(theme: ThemeConfig, customizations: list[str]) -> str:
