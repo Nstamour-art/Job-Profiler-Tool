@@ -1,26 +1,28 @@
 # Job Profiler Tool
 
-Automatically tailors your resume and generates a cover letter for any job posting. Paste a job URL, and the tool scrapes the posting, sends it to an LLM alongside your resume data, and outputs a ready-to-send `.docx` resume and cover letter. LLM responses are validated against strict JSON schemas, with automatic repair and retry logic to handle malformed output.
-
-Supports any major job board or ATS — LinkedIn, Indeed, Glassdoor, Greenhouse, Lever, Workday, and more.
+An AI-powered job search agent that tailors your resume and cover letter for any job posting. Run once and the agent surfaces relevant listings, generates application documents, and logs results to a Google Sheet — all in one session.
 
 Supports local Ollama, Ollama Cloud, OpenAI, Anthropic, and Google Gemini via a `--provider` flag.
-
-Also supports referencing a Google Sheet via the Google Cloud API for batch processing — see [Google Sheets Setup](#google-sheets-setup-optional).
 
 ---
 
 ## How It Works
 
-1. Reads your resume from `resume.yaml`
-2. Checks the Google Sheet's **Details** column for a cached job description — scrapes the URL only if it is empty
-3. Parses the raw page content using a lightweight model (`parser_model`) to extract structured details: company, title, seniority, industry, salary range, required skills, responsibilities, and culture signals
-4. Sends the structured job details and resume to the main LLM to generate a tailored resume, cover letter, and priority rating
-5. Validates LLM output against strict JSON schemas — automatically repairs malformed JSON and retries the full LLM call if repair fails (configurable via `max_retries` in `config.yaml`)
-6. Writes named `.docx` files to a dated output folder
-7. Writes the job description, priority score, reasoning, and status back to the sheet in one request
+### Agent mode (default)
 
-Optionally, jobs can be queued in a Google Sheet and processed in batch.
+Running `uv run python main.py run` starts an interactive job search session:
+
+1. **Resume onboarding** — if `resume.yaml` doesn't exist yet, the tool interviews you section by section before starting. Accepts typed answers or pasted content (LinkedIn profile, old resume, bullet lists). Extracts structured data automatically and asks you to confirm each section before saving.
+2. **Job search loop** — the agent searches for relevant job listings based on your resume, scrapes each posting, and tailors your resume and cover letter to match.
+3. **Sheet logging** — each processed job is logged to your Google Sheet with its priority score and reasoning (optional — see [Google Sheets Setup](#google-sheets-setup-optional)).
+
+You can also pass a job URL directly to process a single posting without entering the agent loop:
+
+```bash
+uv run python main.py run --url "https://www.linkedin.com/jobs/view/..."
+```
+
+This mode requires `resume.yaml` to already exist.
 
 ---
 
@@ -34,19 +36,22 @@ Optionally, jobs can be queued in a Google Sheet and processed in batch.
   - **OpenAI** (`--provider openai`) — an OpenAI account and `OPENAI_API_KEY`
   - **Anthropic** (`--provider anthropic`) — an Anthropic account and `ANTHROPIC_API_KEY`
   - **Google Gemini** (`--provider gemini`) — a Google AI Studio account and `GEMINI_API_KEY`
+- **Agent mode only:** a [Tavily](https://tavily.com) account and `TAVILY_API_KEY` (free tier available)
 
 ---
 
 ## Required Files
 
-Before running the tool, you need four files in place. Three are gitignored and must be created locally:
+Before running the tool, you need two files in place. Both are gitignored and must be created locally:
 
 | File | Source | Purpose |
 | --- | --- | --- |
 | `.env` | Copy from `.env.example` | API key(s) for your chosen provider |
-| `resume.yaml` | Copy from `example_resume.yaml` | Your resume data |
 | `config.yaml` | Copy from `example_config.yaml` | Model and path settings |
-| `credentials/google_service_account.json` | Google Cloud Console | Google Sheets access (optional) |
+
+`resume.yaml` is created automatically the first time you run `uv run python main.py run` (agent mode). You can also create it manually by copying `example_resume.yaml`.
+
+`credentials/google_service_account.json` is optional — only needed for Google Sheets logging.
 
 ---
 
@@ -92,30 +97,13 @@ OLLAMA_API_KEY=your_key_here      # --provider cloud
 OPENAI_API_KEY=your_key_here      # --provider openai
 ANTHROPIC_API_KEY=your_key_here   # --provider anthropic
 GEMINI_API_KEY=your_key_here      # --provider gemini
+TAVILY_API_KEY=your_key_here      # required for agent mode
+HINDSIGHT_BASE_URL=http://localhost:8888  # optional: Hindsight memory server
 ```
 
 No key is needed for `--provider local` (the default).
 
-### 4. Fill out your resume
-
-```bash
-cp example_resume.yaml resume.yaml
-```
-
-Edit `resume.yaml` with your information. The key sections are:
-
-| Section | Description |
-| --- | --- |
-| `basics` | Name, email, phone, location, LinkedIn/GitHub profiles |
-| `work` | Employment history — each entry has a `description` (paragraph summary) and `highlights` (bullet points) |
-| `education` | Degree, field of study, institution |
-| `skills` | Skill categories with keyword lists |
-| `projects` | Portfolio projects with highlights and optional URL |
-| `certificates` | Certifications with name and issuer |
-
-> **Tip:** Keep `resume.yaml` as a complete master list. The LLM selects, reorders, and rewrites content to best match each specific job posting. The `description` field on each work entry gives the LLM richer context to draw from — write it like a paragraph summary of your role.
-
-### 5. Configure the tool
+### 4. Configure the tool
 
 ```bash
 cp example_config.yaml config.yaml
@@ -158,92 +146,105 @@ llm:
     parser_model: "gemini-2.0-flash"
     parser_fallback_models:
       - "gemini-2.0-flash-lite"
+
+agent:
+  max_jobs: 10        # max job listings surfaced per search session
+  memory_bank: ""     # defaults to resume basics.name if empty
+  memory_model: ""    # defaults to parser_model for your provider if empty
 ```
 
-**`parser_model`** is used only for the job description parsing step — a lightweight model keeps this fast and cheap. If omitted, `model` is used for both stages.
+**`parser_model`** is used for the job description parsing step and resume onboarding extraction — a lightweight model keeps these fast and cheap. If omitted, `model` is used for all stages.
 
-**`fallback_models`** / **`parser_fallback_models`** are tried in order when the primary model returns a rate-limit or capacity error (HTTP 503 / 429). If a fallback is available, the tool switches automatically and prints a notice. If none are configured and the primary fails, the script exits with an error.
+**`fallback_models`** / **`parser_fallback_models`** are tried in order when the primary model returns a rate-limit or capacity error (HTTP 503 / 429). If a fallback is available, the tool switches automatically and prints a notice.
 
 **`max_retries`** controls how many times the tool re-calls the same model when the LLM returns unparseable JSON (after automatic repair). Set to `1` to disable retries.
+
+**`agent.max_jobs`** caps how many job listings the agent surfaces per session.
+
+### 5. Run the tool
+
+```bash
+# Start an agent job search session (local Ollama)
+uv run python main.py run
+
+# Use a different provider
+uv run python main.py run --provider anthropic
+```
+
+If `resume.yaml` doesn't exist yet, the tool will walk you through building it interactively before starting the search. You can type answers or paste directly from LinkedIn, a PDF copy, or an old resume — the tool extracts the structured data automatically.
 
 ---
 
 ## Usage
 
-### Process a single job URL (no Google Sheet needed)
-
-Works with any major job board or ATS — LinkedIn, Indeed, Glassdoor, Greenhouse, Lever, Workday, and more.
+### Agent mode
 
 ```bash
-# Local Ollama (default — no flag needed)
+uv run python main.py run
+uv run python main.py run --provider anthropic
+uv run python main.py run --provider openai
+```
+
+Starts an interactive job search session. The agent searches for relevant listings, generates tailored application documents, and logs results. Requires `TAVILY_API_KEY`.
+
+### Direct URL mode
+
+Process a single job posting without entering the agent loop:
+
+```bash
 uv run python main.py run --url "https://www.linkedin.com/jobs/view/..."
-
-# Ollama Cloud
-uv run python main.py run --url "https://www.linkedin.com/jobs/view/..." --provider cloud
-
-# OpenAI
 uv run python main.py run --url "https://www.linkedin.com/jobs/view/..." --provider openai
-
-# Anthropic
-uv run python main.py run --url "https://www.linkedin.com/jobs/view/..." --provider anthropic
-
-# Google Gemini
-uv run python main.py run --url "https://www.linkedin.com/jobs/view/..." --provider gemini
 ```
 
 Output files are saved to `output/<Company>_<Role>_<date>/`.
-
-### Use with a Google Sheet (batch mode)
-
-Set up Google Sheets access first (see [Google Sheets Setup](#google-sheets-setup-optional) below), then:
-
-```bash
-# List all jobs in the sheet
-uv run python main.py list
-
-# Process a specific row
-uv run python main.py run --row 2
-
-# Process all rows where Status is blank
-uv run python main.py run --all
-
-# Reprocess a row even if it already has a status
-uv run python main.py run --row 2 --force
-uv run python main.py run --all --force
-```
-
-All sheet commands also accept `--provider` to choose the LLM backend.
-
-After each successful run, the tool automatically writes back to the sheet:
-
-| Column | Value |
-| --- | --- |
-| **Status** | `Generated` |
-| **Details** | Scraped job description (cached for future runs — skips re-scraping) |
-| **Priority** | 1-10 score (1 = apply immediately, 10 = low priority) |
-| **Reasoning** | One-sentence explanation of the priority score |
-
-Any row with a non-blank Status is skipped on future runs. Use `--force` to reprocess it, or clear the Status cell manually.
 
 ### All flags
 
 | Flag | Description |
 | --- | --- |
-| `--url <url>` | Process a single job URL directly, no Google Sheet needed |
-| `--row <n>` | Process a specific row number from the Google Sheet |
-| `--all` | Process all rows where Status is blank |
+| `--url <url>` | Process a single job URL directly (skips agent loop) |
 | `--provider` | LLM backend: `local` (default), `cloud`, `openai`, `anthropic`, `gemini` |
 | `--resume-only` | Generate only the resume, skip the cover letter |
 | `--cover-only` | Generate only the cover letter, skip the resume |
-| `--force` | Reprocess rows that already have a Status set |
 | `--config` | Path to a custom config file (default: `config.yaml`) |
 | `--debug` | Log scraped content and all LLM outputs to `debug.db` (SQLite) |
 
 ---
 
+## Resume Onboarding
+
+When `resume.yaml` doesn't exist, the tool automatically runs a guided interview before starting the job search:
+
+```text
+Let's start with your basic info. What's your name, email, phone, location,
+and any LinkedIn or GitHub profiles? You can type it out or paste from your profile.
+> ...
+
+Here's what I captured for your basic info:
+
+  Name: Jane Doe
+  Email: jane@example.com
+  ...
+
+Does this look right? (yes / edit / skip)
+>
+```
+
+- **yes** — section saved, move to next
+- **edit** — type a correction; the tool re-extracts with your original input and the correction combined
+- **skip** — section left empty, move to next
+
+Sections covered: basics, work history, education, skills, projects, certificates.
+
+After all sections are confirmed, `resume.yaml` is written and the job search loop starts immediately in the same session.
+
+> **Tip:** You can paste a full LinkedIn About section, resume PDF copy-paste, or bullet list — the tool extracts structured data from any format.
+
+---
+
 ## Google Sheets Setup (Optional)
 
-Only needed if you want to manage job queues via spreadsheet.
+Only needed if you want the agent to log processed jobs to a spreadsheet.
 
 1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a project.
 2. Enable the **Google Sheets API** and **Google Drive API**.
@@ -258,14 +259,23 @@ google_sheets:
   worksheet_name: "Sheet1"
   columns:
     job_title: "Job Title"
+    company: "Company"
     url: "URL"
     status: "Status"
+    date_found: "Date Found"
     details: "Details"
     priority: "Priority"
     reasoning: "Reasoning"
 ```
 
-Your sheet should have columns: **Job Title**, **URL**, **Status**, **Details**, **Priority**, **Reasoning**.
+Your sheet should have columns matching the names configured above. After each job is processed, the agent writes:
+
+| Column | Value |
+| --- | --- |
+| **Status** | `Generated` |
+| **Details** | Scraped job description |
+| **Priority** | 1-10 score (1 = apply immediately, 10 = low priority) |
+| **Reasoning** | One-sentence explanation of the priority score |
 
 ---
 
