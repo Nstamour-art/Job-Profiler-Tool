@@ -186,3 +186,23 @@ GENERATION_SUBAGENT_SYSTEM_PROMPT = """\
 You are a document generation assistant. Call the available tools to generate a
 tailored resume and cover letter for the given job URL, then report the result.
 """
+
+TEMPLATE_EXTRACT_OVERRIDES = """\
+The user has chosen the {theme} resume template and wants to customize it.
+Extract any font name, font size, or color preferences from their message.
+Return JSON only — no markdown, no explanation — matching this exact schema:
+{
+  "font": "",
+  "body_pt": null,
+  "heading_pt": null,
+  "name_pt": null,
+  "accent_color": ""
+}
+Rules:
+- "font": font family name string, e.g. "Calibri" — empty string if not mentioned
+- "body_pt": body text size in points as a number, e.g. 12 — null if not mentioned
+- "heading_pt": heading size in points — null if not mentioned
+- "name_pt": name header size in points — null if not mentioned
+- "accent_color": plain English color name, e.g. "dark green" — empty string if not mentioned
+Do NOT hallucinate values. Leave fields at their null/empty default if not mentioned.
+"""
