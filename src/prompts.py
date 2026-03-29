@@ -194,13 +194,13 @@ TEMPLATE_EXTRACT_OVERRIDES = """\
 The user has chosen the {theme} resume template and wants to customize it.
 Extract any font name, font size, or color preferences from their message.
 Return JSON only — no markdown, no explanation — matching this exact schema:
-{
+{{
   "font": "",
   "body_pt": null,
   "heading_pt": null,
   "name_pt": null,
   "accent_color": ""
-}
+}}
 Rules:
 - "font": font family name string, e.g. "Calibri" — empty string if not mentioned
 - "body_pt": body text size in points as a number, e.g. 12 — null if not mentioned
