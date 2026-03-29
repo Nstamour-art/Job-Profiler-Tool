@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import getpass
 import os
+import urllib.request
 from pathlib import Path
 
 import yaml
@@ -41,7 +42,6 @@ _PROVIDER_NAMES = ["local", "openai", "anthropic", "gemini", "cloud"]
 
 def _ollama_reachable() -> bool:
     """Return True if a local Ollama server is responding on localhost:11434."""
-    import urllib.request
     try:
         urllib.request.urlopen("http://localhost:11434/", timeout=2)
         return True
@@ -51,9 +51,10 @@ def _ollama_reachable() -> bool:
 
 def _append_env(key: str, value: str, env_path: str = ".env") -> None:
     """Append or replace a KEY=value line in the .env file."""
+    value = value.replace("\r", "").replace("\n", "")
     path = Path(env_path)
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-    lines = [l for l in lines if not l.startswith(f"{key}=")]
+    lines = [line for line in lines if not line.startswith(f"{key}=")]
     lines.append(f"{key}={value}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -86,7 +87,9 @@ def ensure_provider_ready(
             print("  Or pass --provider <name> to use a cloud provider.\n")
             raise SystemExit(1)
     else:
-        key_var = _API_KEY_VARS[provider_name]
+        key_var = _API_KEY_VARS.get(provider_name)
+        if key_var is None:
+            raise ValueError(f"Unknown provider: {provider_name!r}. Choose from: {list(_PROVIDER_NAMES)}")
         if not os.environ.get(key_var, "").strip():
             print(f"\n  {provider_name.capitalize()} API key not found.")
             _prompt_for_api_key(provider_name, key_var, env_path)
