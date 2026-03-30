@@ -49,11 +49,14 @@ class MemoryManager:
             self._client = Hindsight(base_url=base_url)
             self._available = True
         except Exception as exc:
-            print(f"  [memory] Could not connect to Hindsight ({exc}) — running without persistent memory.")
+            print(
+                f"  [memory] Could not connect to Hindsight ({exc})"
+                " — running without persistent memory."
+            )
 
     def stop(self) -> None:
         """No-op — hindsight-client has no persistent connection to close."""
-        pass
+        return
 
     def retain(self, content: str, context: str = "") -> None:
         """Store a fact or experience in the memory bank."""

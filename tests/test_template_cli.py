@@ -25,7 +25,6 @@ def test_template_subcommand_calls_wizard():
 
 def test_run_agent_chat_has_change_template_tool():
     """build_agent includes a change_template tool."""
-    from unittest.mock import MagicMock, patch
     captured_tools = {}
 
     def fake_create(model, tools, system_prompt):

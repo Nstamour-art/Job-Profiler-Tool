@@ -2,9 +2,9 @@
 
 import json
 import yaml
-from pydantic import BaseModel, ValidationError
 from typing import Type, TypeVar
 
+from pydantic import BaseModel, ValidationError
 import json_repair
 from src.models import JobDetails, ResumeJSON, CoverLetterJSON
 from src.prompts import RESUME_SYSTEM_PROMPT, COVER_LETTER_SYSTEM_PROMPT, JOB_PARSER_SYSTEM_PROMPT
@@ -45,18 +45,24 @@ def _call_with_retry(
     for i, model in enumerate(models):
         for attempt in range(1, max_retries + 1):
             try:
-                raw = provider.call(model=model, system=system, prompt=prompt, temperature=temperature)
+                raw = provider.call(
+                    model=model, system=system, prompt=prompt, temperature=temperature
+                )
             except Exception as e:
                 last_error = e
                 if _is_rate_error(e) and i < len(models) - 1:
-                    click.echo(f"  {model} unavailable (rate/capacity), switching to {models[i + 1]} ...")
+                    click.echo(
+                        f"  {model} unavailable (rate/capacity), switching to {models[i + 1]} ..."
+                    )
                     break  # skip to next model
                 raise RuntimeError(f"LLM provider error: {e}") from e
 
             if raw is None:
                 last_error = RuntimeError("Provider returned None")
                 if attempt < max_retries:
-                    click.echo(f"  Provider returned None (attempt {attempt}/{max_retries}), retrying ...")
+                    click.echo(
+                        f"  Provider returned None (attempt {attempt}/{max_retries}), retrying ..."
+                    )
                 continue
 
             try:
@@ -64,7 +70,9 @@ def _call_with_retry(
             except Exception as e:
                 last_error = e
                 if attempt < max_retries:
-                    click.echo(f"  JSON parse failed (attempt {attempt}/{max_retries}), retrying ...")
+                    click.echo(
+                        f"  JSON parse failed (attempt {attempt}/{max_retries}), retrying ..."
+                    )
         else:
             # Exhausted retries on this model without a rate-error break — give up
             raise ValueError(

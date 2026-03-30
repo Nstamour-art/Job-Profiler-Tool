@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import os
 import pytest
+import yaml
 from pathlib import Path
 from unittest.mock import patch
+from click.testing import CliRunner
 
 
 # ---------------------------------------------------------------------------
@@ -90,8 +92,6 @@ def test_ensure_provider_ready_gemini_missing_key_calls_prompt(monkeypatch):
 # ---------------------------------------------------------------------------
 # run_setup_wizard
 # ---------------------------------------------------------------------------
-
-import yaml
 
 
 def test_run_setup_wizard_local_writes_config(tmp_path):
@@ -188,9 +188,6 @@ def test_run_setup_wizard_local_unreachable_loops_back_to_menu(tmp_path):
 # ---------------------------------------------------------------------------
 # main.py — provider default from config
 # ---------------------------------------------------------------------------
-
-import yaml
-from click.testing import CliRunner
 
 
 def test_template_command_uses_config_provider_as_default(tmp_path):

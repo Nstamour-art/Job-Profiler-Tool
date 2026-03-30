@@ -82,8 +82,8 @@ class OpenAIProvider(LLMProvider):
     def __init__(self) -> None:
         try:
             from openai import OpenAI
-        except ImportError:
-            raise ImportError("OpenAI SDK not installed. Run: uv add openai")
+        except ImportError as exc:
+            raise ImportError("OpenAI SDK not installed. Run: uv add openai") from exc
         self._client = OpenAI(api_key=_require_key("OPENAI_API_KEY", "openai"))
 
     def call(self, model: str, system: str, prompt: str, temperature: float) -> str:
@@ -109,8 +109,8 @@ class AnthropicProvider(LLMProvider):
     def __init__(self) -> None:
         try:
             import anthropic
-        except ImportError:
-            raise ImportError("Anthropic SDK not installed. Run: uv add anthropic")
+        except ImportError as exc:
+            raise ImportError("Anthropic SDK not installed. Run: uv add anthropic") from exc
         self._client = anthropic.Anthropic(api_key=_require_key("ANTHROPIC_API_KEY", "anthropic"))
 
     def call(self, model: str, system: str, prompt: str, temperature: float) -> str:
@@ -138,8 +138,8 @@ class GeminiProvider(LLMProvider):
     def __init__(self) -> None:
         try:
             from google import genai
-        except ImportError:
-            raise ImportError("Google GenAI SDK not installed. Run: uv add google-genai")
+        except ImportError as exc:
+            raise ImportError("Google GenAI SDK not installed. Run: uv add google-genai") from exc
         self._client = genai.Client(api_key=_require_key("GEMINI_API_KEY", "gemini"))
 
     def call(self, model: str, system: str, prompt: str, temperature: float) -> str:

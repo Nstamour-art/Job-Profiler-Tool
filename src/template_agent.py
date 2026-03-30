@@ -36,7 +36,11 @@ def _extract_overrides(
     llm_cfg: dict,
 ) -> TemplateOverrides:
     system = TEMPLATE_EXTRACT_OVERRIDES.format(theme=theme_name)
-    prompt = f'User customization request: "{raw}"\n\nExtract any font name, font size, or color preferences from the above request and return the JSON object.'
+    prompt = (
+        f'User customization request: "{raw}"\n\n'
+        "Extract any font name, font size, or color preferences from the above request "
+        "and return the JSON object."
+    )
     return _call_with_retry(TemplateOverrides, provider, llm_cfg, system, prompt, parser_models)
 
 
@@ -92,7 +96,8 @@ def run_template_wizard(config: dict, provider_name: str) -> ThemeConfig:
 
     # Optional customization
     raw_custom = input(
-        "\nAnything to customize? (font name, size, accent color — or press Enter for defaults)\n> "
+        "\nAnything to customize? "
+        "(font name, size, accent color — or press Enter for defaults)\n> "
     ).strip()
 
     raw_accent_color: str = ""
@@ -131,7 +136,9 @@ def run_template_wizard(config: dict, provider_name: str) -> ThemeConfig:
                 "Apply the correction and return updated JSON."
             )
             try:
-                overrides = _extract_overrides(theme_name, combined, provider, parser_models, llm_cfg)
+                overrides = _extract_overrides(
+                    theme_name, combined, provider, parser_models, llm_cfg
+                )
                 raw_accent_color = overrides.accent_color or ""
                 base = merge_overrides(PRESETS[theme_name], overrides)
                 customizations = []
@@ -146,8 +153,8 @@ def run_template_wizard(config: dict, provider_name: str) -> ThemeConfig:
                 original_raw = combined
             except Exception as exc:
                 print(f"  Re-extraction failed ({exc}). Keeping previous result.\n")
-        else:
-            print("  Please type 'yes', 'edit', or 'skip'.")
+            continue
+        print("  Please type 'yes', 'edit', or 'skip'.")
 
     # Write template.yaml — store only the overrides that differ from base preset
     base_preset = PRESETS[theme_name]

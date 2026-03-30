@@ -10,7 +10,8 @@ Formatting spec:
   - Company/location line: 10pt, Bold — company LEFT, dates RIGHT-TABBED
   - Role: 10pt, Italic
   - Bullets: 10pt, 0.25" hanging indent
-  - Education & Certs: borderless 2-column table (left=education, right=certs); single-column if no certs returned
+  - Education & Certs: borderless 2-column table (left=education, right=certs);
+    single-column if no certs returned
 """
 
 import os
@@ -143,7 +144,8 @@ def _section_heading(doc: "DocxDocument", text: str, theme: "ThemeConfig"):
         bottom.set(qn("w:val"), "single")
         bottom.set(qn("w:sz"), "6")
         bottom.set(qn("w:space"), "1")
-        bottom.set(qn("w:color"), "{:02x}{:02x}{:02x}".format(*theme.accent_color))
+        r2, g2, b2 = theme.accent_color
+        bottom.set(qn("w:color"), f"{r2:02x}{g2:02x}{b2:02x}")
         pBdr.append(bottom)
         pPr.append(pBdr)
     keepNext = OxmlElement("w:keepNext")
@@ -219,7 +221,8 @@ def _build_resume_sidebar(resume_json: ResumeJSON, personal: dict, education: li
                            output_path: str, theme: ThemeConfig):
     """Render resume with two-column sidebar layout (Creative theme)."""
     doc = Document()
-    sidebar_hex = "{:02x}{:02x}{:02x}".format(*theme.sidebar_color)
+    sr, sg, sb = theme.sidebar_color
+    sidebar_hex = f"{sr:02x}{sg:02x}{sb:02x}"
 
     for section in doc.sections:
         section.top_margin = Inches(theme.margin_top)
@@ -427,9 +430,18 @@ def build_resume(resume_json: ResumeJSON, personal: dict, education: list,
               font_name=theme.font)
 
     loc = personal.get("location", {})
-    location_str = ", ".join(p for p in [loc.get("city", ""), loc.get("region", ""), loc.get("countryCode", "")] if p) if isinstance(loc, dict) else str(loc or "")
-    linkedin = next((p.get("username", "") for p in personal.get("profiles", []) if p.get("network") == "LinkedIn"), "")
-    github = next((p.get("username", "") for p in personal.get("profiles", []) if p.get("network") == "GitHub"), "")
+    loc_parts = [loc.get("city", ""), loc.get("region", ""), loc.get("countryCode", "")]
+    location_str = (
+        ", ".join(p for p in loc_parts if p) if isinstance(loc, dict) else str(loc or "")
+    )
+    linkedin = next(
+        (p.get("username", "") for p in personal.get("profiles", [])
+         if p.get("network") == "LinkedIn"), ""
+    )
+    github = next(
+        (p.get("username", "") for p in personal.get("profiles", [])
+         if p.get("network") == "GitHub"), ""
+    )
     contact_parts = [
         location_str,
         personal.get("phone", ""),
@@ -577,9 +589,18 @@ def build_cover_letter(cover_json: CoverLetterJSON, personal: dict,
               font_name=theme.font)
 
     loc = personal.get("location", {})
-    location_str = ", ".join(p for p in [loc.get("city", ""), loc.get("region", ""), loc.get("countryCode", "")] if p) if isinstance(loc, dict) else str(loc or "")
-    linkedin = next((p.get("username", "") for p in personal.get("profiles", []) if p.get("network") == "LinkedIn"), "")
-    github = next((p.get("username", "") for p in personal.get("profiles", []) if p.get("network") == "GitHub"), "")
+    loc_parts = [loc.get("city", ""), loc.get("region", ""), loc.get("countryCode", "")]
+    location_str = (
+        ", ".join(p for p in loc_parts if p) if isinstance(loc, dict) else str(loc or "")
+    )
+    linkedin = next(
+        (p.get("username", "") for p in personal.get("profiles", [])
+         if p.get("network") == "LinkedIn"), ""
+    )
+    github = next(
+        (p.get("username", "") for p in personal.get("profiles", [])
+         if p.get("network") == "GitHub"), ""
+    )
     line1_parts = [
         location_str,
         personal.get("phone", ""),

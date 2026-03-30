@@ -139,7 +139,9 @@ def run_jobs(direct_url, resume_only, cover_only, provider_name, config_path, de
         if not Path(template_yaml).exists():
             run_template_wizard(config, resolved_provider)
 
-        if not click.confirm("\nSetup complete! Ready to start the job search agent?", default=False):
+        if not click.confirm(
+            "\nSetup complete! Ready to start the job search agent?", default=False
+        ):
             click.echo("\nRun 'uv run python main.py run' when you're ready.\n")
             return
 
@@ -164,7 +166,9 @@ def run_jobs(direct_url, resume_only, cover_only, provider_name, config_path, de
         llm_cfg = config["llm"]
         provider = get_provider(resolved_provider, llm_cfg)
         models, parser_models = resolve_models(resolved_provider, llm_cfg)
-        click.echo(f"Provider: {resolved_provider}  |  model: {models[0]}  |  parser: {parser_models[0]}")
+        click.echo(
+            f"Provider: {resolved_provider}  |  model: {models[0]}  |  parser: {parser_models[0]}"
+        )
 
         from src.debug import init_db, log_run
         if debug:
@@ -174,14 +178,18 @@ def run_jobs(direct_url, resume_only, cover_only, provider_name, config_path, de
         from src.pipeline import process_job
         job = {"url": direct_url, "job_title": "", "status": "", "details": "", "row": None}
         click.echo(f"\nProcessing: {direct_url}")
-        debug_run_id = log_run(direct_url, resolved_provider, models[0], parser_models[0]) if debug else None
+        debug_run_id = (
+            log_run(direct_url, resolved_provider, models[0], parser_models[0]) if debug else None
+        )
         folder, _, resume_json = process_job(
             job, config, resume, provider, models, parser_models,
             resume_only=resume_only, cover_only=cover_only,
             debug_run_id=debug_run_id,
         )
         if resume_json is not None:
-            click.echo(f"  Priority: {resume_json.priority}/10 — {resume_json.priority_reasoning}")
+            click.echo(
+                f"  Priority: {resume_json.priority}/10 — {resume_json.priority_reasoning}"
+            )
         click.echo(click.style(f"\n  Saved to: {folder}", fg="green"))
         return
 

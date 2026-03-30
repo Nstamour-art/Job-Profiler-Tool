@@ -76,7 +76,7 @@ def process_job(
 ) -> tuple[str, dict, "ResumeJSON | None"]:
     """
     Full pipeline for one job:
-      scrape (or use cached details) → parse → LLM resume → LLM cover letter → write docx files
+      scrape (or use cached details) → parse → LLM resume → LLM cover letter → write docx
     Returns (output_directory_path, job_data, resume_json).
     """
     url = job.get("url", "")
@@ -121,7 +121,9 @@ def process_job(
             click.echo("  Generating resume context for cover letter …")
             resume_json = generate_resume(job_details, resume, config, provider, models)
         click.echo("  Generating cover letter …")
-        cover_json = generate_cover_letter(job_details, resume, resume_json, config, provider, models)
+        cover_json = generate_cover_letter(
+            job_details, resume, resume_json, config, provider, models
+        )
 
     if debug_run_id is not None:
         if resume_json is not None:
@@ -133,7 +135,10 @@ def process_job(
     theme = _load_theme(template_path)
 
     today_str = date.today().isoformat()
-    folder = Path(config["paths"]["output_dir"]) / f"{_safe_name(company)}_{_safe_name(title)}_{today_str}"
+    folder = (
+        Path(config["paths"]["output_dir"])
+        / f"{_safe_name(company)}_{_safe_name(title)}_{today_str}"
+    )
     folder.mkdir(parents=True, exist_ok=True)
 
     if debug_run_id is not None:
@@ -154,7 +159,9 @@ def process_job(
         )
 
     if not resume_only and cover_json is not None:
-        cover_path = str(_unique_path(folder / f"{candidate_name} - {safe_title} - Cover Letter.docx"))
+        cover_path = str(
+            _unique_path(folder / f"{candidate_name} - {safe_title} - Cover Letter.docx")
+        )
         click.echo("  Building cover_letter.docx …")
         build_cover_letter(
             cover_json=cover_json,

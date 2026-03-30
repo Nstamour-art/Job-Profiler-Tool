@@ -38,7 +38,6 @@ def test_process_job_uses_cached_description(sample_config, sample_resume, tmp_p
 
 def test_process_job_uses_classic_when_no_template_yaml(tmp_path, monkeypatch):
     """process_job falls back to CLASSIC when template.yaml is missing."""
-    from unittest.mock import patch, MagicMock
     from src.themes import CLASSIC
 
     captured_theme = {}

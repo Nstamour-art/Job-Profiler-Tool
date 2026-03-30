@@ -169,5 +169,5 @@ def run_onboarding(config: dict, provider_name: str) -> dict:
     with open(resume_path, "w", encoding="utf-8") as f:
         yaml.dump(resume, f, allow_unicode=True, default_flow_style=False)
 
-    print(f"\nresume.yaml created. Let's find you some jobs!\n")
+    print("\nresume.yaml created. Let's find you some jobs!\n")
     return resume
