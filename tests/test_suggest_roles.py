@@ -34,3 +34,19 @@ def test_suggested_roles_model_empty_roles_list():
     from src.models import SuggestedRoles
     result = SuggestedRoles.model_validate({"roles": []})
     assert result.roles == []
+
+
+# ---------------------------------------------------------------------------
+# Prompt constants
+# ---------------------------------------------------------------------------
+
+def test_suggest_roles_prompt_exists_and_is_string():
+    from src.prompts import SUGGEST_ROLES_PROMPT
+    assert isinstance(SUGGEST_ROLES_PROMPT, str)
+    assert len(SUGGEST_ROLES_PROMPT) > 50
+
+
+def test_search_subagent_prompt_mentions_multiple_roles():
+    from src.prompts import SEARCH_SUBAGENT_SYSTEM_PROMPT
+    assert "multiple" in SEARCH_SUBAGENT_SYSTEM_PROMPT.lower() or \
+           "roles" in SEARCH_SUBAGENT_SYSTEM_PROMPT.lower()
