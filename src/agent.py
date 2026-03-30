@@ -149,8 +149,6 @@ def run_agent_chat(config: dict, provider_name: str) -> None:
                     else str(last_msg.content) if isinstance(last_msg.content, str)
                     else ""
                 )
-                print(type(last_msg.content), last_msg.content, flush=True)
-                print(response_text)
                 history = result["messages"]
                 memory.retain(
                     f"User said: {user_input}\nJob Agent responded: {response_text[:300]}",
