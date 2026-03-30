@@ -6,7 +6,6 @@ tools, and runs the interactive chat loop.
 """
 
 from __future__ import annotations
-
 import os
 import uuid
 from pathlib import Path
@@ -89,7 +88,7 @@ def build_agent(config: dict, resume: dict, provider_name: str, recalled_memorie
     return create_deep_agent(
         model=agent_model,
         tools=[search_tool, generate_tool, read_resume, write_resume,
-               sheet_log_tool, change_template_tool, suggest_roles_tool],
+                sheet_log_tool, change_template_tool, suggest_roles_tool],
         system_prompt=system_prompt,
     )
 
@@ -115,8 +114,10 @@ def run_agent_chat(config: dict, provider_name: str) -> None:
     recalled_jobs = memory.recall("What jobs has this user already been shown?")
     recalled_memories = "\n".join(filter(None, [recalled_prefs, recalled_jobs]))
 
+    from langchain_core.runnables import RunnableConfig
+
     agent = build_agent(config, resume, provider_name, recalled_memories)
-    thread_config = {"configurable": {"thread_id": str(uuid.uuid4())}}
+    thread_config = {"thread_id": str(uuid.uuid4())}
 
     print("\nJob Search Agent ready. Type 'exit' to quit.\n")
 
@@ -127,11 +128,11 @@ def run_agent_chat(config: dict, provider_name: str) -> None:
             try:
                 user_input = input("You: ").strip()
             except (EOFError, KeyboardInterrupt):
-                print("\nAgent: Goodbye!")
+                print("\nJob Agent: Goodbye!")
                 break
 
             if user_input.lower() in ("exit", "quit", "bye"):
-                print("Agent: Goodbye! Good luck with your applications.")
+                print("Job Agent: Goodbye! Good luck with your applications.")
                 break
 
             if not user_input:
@@ -139,22 +140,23 @@ def run_agent_chat(config: dict, provider_name: str) -> None:
 
             history.append({"role": "user", "content": user_input})
 
-            print("Agent: ", end="", flush=True)
+            print("Job Agent: ", end="", flush=True)
             try:
-                result = agent.invoke({"messages": history}, thread_config)
+                result = agent.invoke({"messages": history}, config=RunnableConfig(configurable=thread_config))
                 last_msg = result["messages"][-1]
                 response_text = (
-                    last_msg.content
-                    if isinstance(last_msg.content, str)
-                    else str(last_msg.content)
+                    last_msg.content[0]["text"] if isinstance(last_msg.content, list) and len(last_msg.content) > 0 and "text" in last_msg.content[0]
+                    else str(last_msg.content) if isinstance(last_msg.content, str)
+                    else ""
                 )
+                print(type(last_msg.content), last_msg.content, flush=True)
                 print(response_text)
                 history = result["messages"]
                 memory.retain(
-                    f"User said: {user_input}\nAgent responded: {response_text[:300]}",
+                    f"User said: {user_input}\nJob Agent responded: {response_text[:300]}",
                     context="conversation",
                 )
             except Exception as exc:
-                print(f"\n[Agent error: {exc}]")
+                print(f"\n[Job Agent error: {exc}]")
     finally:
         memory.stop()

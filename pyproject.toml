@@ -31,6 +31,7 @@ dependencies = [
     "langchain-tavily>=0.1.0",
     "hindsight-client>=0.4.0",
     "pytest>=8.0.0",
+    "langchain-google-vertexai>=3.2.2",
 ]
 
 [tool.pytest.ini_options]
