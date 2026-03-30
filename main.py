@@ -69,8 +69,17 @@ def list_jobs(config_path):
 @click.option("--config", "config_path", default="config.yaml", show_default=True)
 def set_template(provider_name, config_path):
     """Interactively choose and customize your resume template."""
-    config = load_config(config_path)
-    resolved_provider = provider_name or "local"
+    from pathlib import Path
+    if not Path(config_path).exists():
+        from src.setup_wizard import run_setup_wizard
+        config = run_setup_wizard(config_path)
+    else:
+        config = load_config(config_path)
+
+    resolved_provider = provider_name or config.get("provider", "local")
+
+    from src.setup_wizard import ensure_provider_ready
+    ensure_provider_ready(resolved_provider, config)
     run_template_wizard(config, resolved_provider)
 
 
@@ -109,7 +118,10 @@ def run_jobs(direct_url, resume_only, cover_only, provider_name, config_path, de
     resume  = load_resume(config["paths"]["resume_yaml"])
 
     from src.providers import get_provider, resolve_models
-    resolved_provider = provider_name or "local"
+    resolved_provider = provider_name or config.get("provider", "local")
+
+    from src.setup_wizard import ensure_provider_ready
+    ensure_provider_ready(resolved_provider, config)
 
     # --- Direct URL mode (existing pipeline, unchanged) ---
     if direct_url:

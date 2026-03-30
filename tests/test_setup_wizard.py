@@ -183,3 +183,70 @@ def test_run_setup_wizard_local_unreachable_loops_back_to_menu(tmp_path):
         from src.setup_wizard import run_setup_wizard
         result = run_setup_wizard(str(config_path), str(env_path))
     assert result["provider"] == "gemini"
+
+
+# ---------------------------------------------------------------------------
+# main.py — provider default from config
+# ---------------------------------------------------------------------------
+
+import yaml
+from click.testing import CliRunner
+
+
+def test_template_command_uses_config_provider_as_default(tmp_path):
+    """When no --provider flag is passed, template should use config["provider"]."""
+    config = {
+        "provider": "gemini",
+        "llm": {"temperature": 0.3, "max_retries": 3, "model": "llama3.2:latest",
+                "parser_model": "llama3.2:latest"},
+        "paths": {"resume_yaml": "resume.yaml", "template_yaml": str(tmp_path / "template.yaml"),
+                  "output_dir": "output", "credentials": "creds.json"},
+        "agent": {"max_jobs": 10, "memory_bank": "", "memory_model": ""},
+    }
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(yaml.dump(config))
+
+    import main as main_module  # ensure module is loaded before patching its names
+    with patch("src.setup_wizard.ensure_provider_ready"), \
+         patch.object(main_module, "run_template_wizard") as mock_wizard:
+        from main import cli
+        runner = CliRunner()
+        result = runner.invoke(cli, ["template", "--config", str(config_path)])
+    assert result.exit_code == 0, result.output
+    # provider passed to run_template_wizard must be "gemini", not "local"
+    mock_wizard.assert_called_once()
+    _, called_provider = mock_wizard.call_args[0]
+    assert called_provider == "gemini"
+
+
+def test_run_command_uses_config_provider_as_default(tmp_path):
+    """run command without --provider should use config["provider"]."""
+    import sys
+    from unittest.mock import MagicMock
+
+    config = {
+        "provider": "anthropic",
+        "llm": {"temperature": 0.3, "max_retries": 3, "model": "llama3.2:latest",
+                "parser_model": "llama3.2:latest"},
+        "paths": {"resume_yaml": str(tmp_path / "resume.yaml"),
+                  "template_yaml": str(tmp_path / "template.yaml"),
+                  "output_dir": "output", "credentials": "creds.json"},
+        "agent": {"max_jobs": 10, "memory_bank": "", "memory_model": ""},
+    }
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(yaml.dump(config))
+    resume_path = tmp_path / "resume.yaml"
+    resume_path.write_text("basics: {name: Test}")
+
+    mock_agent = MagicMock()
+    mock_agent_module = MagicMock()
+    mock_agent_module.run_agent_chat = mock_agent
+
+    with patch("src.setup_wizard.ensure_provider_ready"), \
+         patch.dict(sys.modules, {"src.agent": mock_agent_module}):
+        from main import cli
+        runner = CliRunner()
+        result = runner.invoke(cli, ["run", "--config", str(config_path)])
+    assert result.exit_code == 0, result.output
+    mock_agent.assert_called_once()
+    assert mock_agent.call_args[1]["provider_name"] == "anthropic"
