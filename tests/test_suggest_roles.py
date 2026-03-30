@@ -136,5 +136,5 @@ def test_build_agent_includes_suggest_roles_tool():
         build_agent(config, resume, "local", "")
 
     mock_create.assert_called_once()
-    tools_passed = mock_create.call_args[1]["tools"]
+    tools_passed = mock_create.call_args.kwargs["tools"]
     assert mock_suggest.return_value in tools_passed
