@@ -154,27 +154,29 @@ def run_setup_wizard(
     print("\nWelcome to Job Profiler Tool!")
     print("Let's get you set up. This will only take a couple of minutes.\n")
 
-    # --- Provider selection ---
+    # --- Provider selection + provider-specific setup ---
     while True:
-        choice = input(_PROVIDER_MENU).strip()
-        if choice in ("1", "2", "3", "4", "5"):
-            provider = _PROVIDER_NAMES[int(choice) - 1]
-            break
-        print("  Please enter a number from 1 to 5.")
+        while True:
+            choice = input(_PROVIDER_MENU).strip()
+            if choice in ("1", "2", "3", "4", "5"):
+                provider = _PROVIDER_NAMES[int(choice) - 1]
+                break
+            print("  Please enter a number from 1 to 5.")
 
-    # --- Provider-specific setup ---
-    if provider == "local":
-        if _ollama_reachable():
-            print("\n  Ollama is running.")
+        if provider == "local":
+            if _ollama_reachable():
+                print("\n  Ollama is running.\n")
+                break
+            else:
+                print("\n  Ollama doesn't appear to be running.")
+                print("  Install it from https://ollama.com, then re-run this tool.")
+                input("\n  Press Enter to choose a different provider, or Ctrl+C to exit.\n> ")
+                # Loop back to provider selection
         else:
-            print("\n  Ollama doesn't appear to be running.")
-            print("  Install it from https://ollama.com, then re-run this tool.")
-            input("\n  Press Enter to choose a different provider, or Ctrl+C to exit.\n> ")
-            return run_setup_wizard(config_path, env_path)
-    else:
-        key_var = _API_KEY_VARS[provider]
-        if not os.environ.get(key_var, "").strip():
-            _prompt_for_api_key(provider, key_var, env_path)
+            key_var = _API_KEY_VARS[provider]
+            if not os.environ.get(key_var, "").strip():
+                _prompt_for_api_key(provider, key_var, env_path)
+            break
 
     # --- Google Sheets (optional) ---
     sheets: dict | None = None

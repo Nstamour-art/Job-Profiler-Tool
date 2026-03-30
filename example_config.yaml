@@ -57,6 +57,7 @@ llm:
 
 paths:
   resume_yaml: "resume.yaml"
+  template_yaml: "template.yaml"
   output_dir: "output"
   credentials: "credentials/google_service_account.json"
 

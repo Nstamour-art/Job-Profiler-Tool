@@ -167,3 +167,19 @@ def test_run_setup_wizard_google_sheets_default_worksheet(tmp_path):
         from src.setup_wizard import run_setup_wizard
         result = run_setup_wizard(str(config_path), str(env_path))
     assert result["google_sheets"]["worksheet_name"] == "Sheet1"
+
+
+def test_run_setup_wizard_local_unreachable_loops_back_to_menu(tmp_path):
+    """When Ollama is unreachable, wizard loops back to provider selection."""
+    config_path = tmp_path / "config.yaml"
+    env_path = tmp_path / ".env"
+    # First choice: local (fails — Ollama unreachable)
+    # User presses Enter to go back, then picks Gemini
+    inputs = ["1", "", "4", "no"]
+    reachable_sequence = [False, True]  # unreachable first time, irrelevant after
+    with patch("src.setup_wizard._ollama_reachable", side_effect=reachable_sequence), \
+         patch("builtins.input", side_effect=inputs), \
+         patch("src.setup_wizard._prompt_for_api_key", return_value="test-key"):
+        from src.setup_wizard import run_setup_wizard
+        result = run_setup_wizard(str(config_path), str(env_path))
+    assert result["provider"] == "gemini"
