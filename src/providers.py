@@ -77,6 +77,8 @@ class OllamaCloudProvider(LLMProvider):
 # ---------------------------------------------------------------------------
 
 class OpenAIProvider(LLMProvider):
+    """OpenAI chat completions provider (requires OPENAI_API_KEY)."""
+
     def __init__(self) -> None:
         try:
             from openai import OpenAI
@@ -102,6 +104,8 @@ class OpenAIProvider(LLMProvider):
 # ---------------------------------------------------------------------------
 
 class AnthropicProvider(LLMProvider):
+    """Anthropic Messages API provider (requires ANTHROPIC_API_KEY)."""
+
     def __init__(self) -> None:
         try:
             import anthropic
@@ -129,6 +133,8 @@ class AnthropicProvider(LLMProvider):
 # ---------------------------------------------------------------------------
 
 class GeminiProvider(LLMProvider):
+    """Google Gemini provider via google-genai SDK (requires GEMINI_API_KEY)."""
+
     def __init__(self) -> None:
         try:
             from google import genai
