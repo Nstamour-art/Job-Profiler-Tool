@@ -1,3 +1,5 @@
+"""System and user prompt constants for every LLM call in the pipeline."""
+
 RESUME_SYSTEM_PROMPT = """\
 You are an expert resume writer. Your job is to tailor a candidate's resume for a specific job posting.
 

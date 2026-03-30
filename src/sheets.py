@@ -1,3 +1,5 @@
+"""Google Sheets integration — read jobs and append/update rows."""
+
 import gspread
 from google.oauth2.service_account import Credentials
 

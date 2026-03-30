@@ -1,8 +1,11 @@
+"""Job posting scraper — fetches and cleans raw page text from a URL."""
+
 import re
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
 
 class ScraperError(Exception):
+    """Error raised when scraping or parsing a job posting fails."""
     pass
 
 

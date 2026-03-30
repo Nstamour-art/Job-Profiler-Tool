@@ -103,6 +103,7 @@ def log_run(url: str, provider: str, model: str, parser_model: str) -> int:
 
 
 def log_output_folder(run_id: int, folder: str) -> None:
+    """Record the output folder path for a debug run."""
     conn = _connect()
     conn.execute("UPDATE runs SET output_folder = ? WHERE id = ?", (folder, run_id))
     conn.commit()
@@ -110,6 +111,7 @@ def log_output_folder(run_id: int, folder: str) -> None:
 
 
 def log_scraped(run_id: int, raw_content: str) -> None:
+    """Store raw scraped page content for a debug run."""
     conn = _connect()
     conn.execute(
         "INSERT OR REPLACE INTO scraped (run_id, raw_content) VALUES (?, ?)",
@@ -120,6 +122,7 @@ def log_scraped(run_id: int, raw_content: str) -> None:
 
 
 def log_job_details(run_id: int, details: "JobDetails") -> None:
+    """Persist parsed job details for a debug run."""
     conn = _connect()
     conn.execute(
         """INSERT OR REPLACE INTO job_details
@@ -144,6 +147,7 @@ def log_job_details(run_id: int, details: "JobDetails") -> None:
 
 
 def log_resume(run_id: int, resume_json: "ResumeJSON") -> None:
+    """Persist the generated resume JSON for a debug run."""
     conn = _connect()
     conn.execute(
         """INSERT OR REPLACE INTO resume_output
@@ -167,6 +171,7 @@ def log_resume(run_id: int, resume_json: "ResumeJSON") -> None:
 
 
 def log_cover_letter(run_id: int, cover_json: "CoverLetterJSON") -> None:
+    """Persist the generated cover letter JSON for a debug run."""
     conn = _connect()
     conn.execute(
         """INSERT OR REPLACE INTO cover_letter_output

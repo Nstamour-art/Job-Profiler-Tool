@@ -1,3 +1,5 @@
+"""LLM call utilities — retry logic, JSON parsing, and document generators."""
+
 import json
 import yaml
 from pydantic import BaseModel, ValidationError

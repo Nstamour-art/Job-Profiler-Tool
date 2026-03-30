@@ -23,11 +23,13 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 
 def load_config(config_path: str = "config.yaml") -> dict:
+    """Load and return config.yaml as a dict."""
     with open(config_path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
 def load_resume(resume_path: str) -> dict:
+    """Load and return resume.yaml as a dict."""
     with open(resume_path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
