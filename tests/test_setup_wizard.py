@@ -250,3 +250,37 @@ def test_run_command_uses_config_provider_as_default(tmp_path):
     assert result.exit_code == 0, result.output
     mock_agent.assert_called_once()
     assert mock_agent.call_args[1]["provider_name"] == "anthropic"
+
+
+# ---------------------------------------------------------------------------
+# main.py — first-run detection
+# ---------------------------------------------------------------------------
+
+def test_run_command_triggers_setup_when_config_missing(tmp_path):
+    """When config.yaml doesn't exist, run should call run_setup_wizard."""
+    config_path = tmp_path / "config.yaml"
+    # config does NOT exist
+
+    mock_config = {
+        "provider": "gemini",
+        "llm": {"temperature": 0.3, "max_retries": 3, "model": "m", "parser_model": "m"},
+        "paths": {"resume_yaml": str(tmp_path / "resume.yaml"),
+                  "template_yaml": str(tmp_path / "template.yaml"),
+                  "output_dir": "output", "credentials": "creds.json"},
+        "agent": {"max_jobs": 10, "memory_bank": "", "memory_model": ""},
+    }
+
+    with patch("src.setup_wizard.run_setup_wizard", return_value=mock_config) as mock_wizard, \
+         patch("src.onboarding.run_onboarding", return_value={}) as mock_onboarding, \
+         patch("main.run_template_wizard") as mock_template, \
+         patch("src.agent.run_agent_chat") as mock_agent, \
+         patch("click.confirm", return_value=False):
+        from main import cli
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--config", str(config_path), "run"])
+
+    assert result.exit_code == 0, result.output
+    mock_wizard.assert_called_once_with(str(config_path))
+    mock_onboarding.assert_called_once()
+    mock_template.assert_called_once()
+    mock_agent.assert_not_called()
