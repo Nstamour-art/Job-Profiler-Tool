@@ -50,3 +50,12 @@ class CoverLetterJSON(BaseModel):
     highlights_intro: str = ""  # short transition sentence before bullets (empty string = use default)
     highlights: list[str]       # bullet points for emphasis (empty list = omit)
     closing: str
+
+
+class SuggestedRole(BaseModel):
+    title: str
+    reasoning: str
+
+
+class SuggestedRoles(BaseModel):
+    roles: list[SuggestedRole]
