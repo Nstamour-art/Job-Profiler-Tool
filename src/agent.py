@@ -23,6 +23,7 @@ from src.tools.search import create_search_tool
 from src.tools.generate import create_generate_tool
 from src.tools.resume_editor import create_resume_tools
 from src.tools.sheet_log import create_sheet_log_tool
+from src.tools.suggest_roles import create_suggest_roles_tool
 
 
 def _create_change_template_tool(config: dict, provider_name: str):
@@ -52,10 +53,10 @@ _LANGCHAIN_PREFIX: dict[str, str] = {
 }
 
 
-def _langchain_model_string(provider_name: str, config: dict) -> str:
+def _langchain_model_string(provider_name: str, config: dict) -> tuple[str, str]:
     prefix = _LANGCHAIN_PREFIX.get(provider_name, "ollama")
     models, _ = resolve_models(provider_name, config["llm"])
-    return f"{prefix}:{models[0]}"
+    return prefix, models[0]
 
 
 def build_agent(config: dict, resume: dict, provider_name: str, recalled_memories: str):
@@ -63,8 +64,8 @@ def build_agent(config: dict, resume: dict, provider_name: str, recalled_memorie
 
     Separated from run_agent_chat so it can be unit-tested without a chat loop.
     """
-    model_str = _langchain_model_string(provider_name, config)
-    agent_model = init_chat_model(model_str)
+    prefix, model_name = _langchain_model_string(provider_name, config)
+    agent_model = init_chat_model(model=model_name, model_provider=prefix)
 
     tavily_api_key = os.environ.get("TAVILY_API_KEY", "")
     max_jobs = config.get("agent", {}).get("max_jobs", 10)
@@ -77,6 +78,7 @@ def build_agent(config: dict, resume: dict, provider_name: str, recalled_memorie
     read_resume, write_resume = create_resume_tools(config["paths"]["resume_yaml"])
     sheet_log_tool = create_sheet_log_tool(config)
     change_template_tool = _create_change_template_tool(config, provider_name)
+    suggest_roles_tool = create_suggest_roles_tool(config, provider, parser_models)
 
     system_prompt = AGENT_SYSTEM_PROMPT_TEMPLATE.format(
         candidate_name=resume["basics"]["name"],
@@ -87,7 +89,7 @@ def build_agent(config: dict, resume: dict, provider_name: str, recalled_memorie
     return create_deep_agent(
         model=agent_model,
         tools=[search_tool, generate_tool, read_resume, write_resume,
-               sheet_log_tool, change_template_tool],
+               sheet_log_tool, change_template_tool, suggest_roles_tool],
         system_prompt=system_prompt,
     )
 
