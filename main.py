@@ -37,8 +37,16 @@ def load_resume(resume_path: str) -> dict:
 # ---------------------------------------------------------------------------
 
 @click.group()
-def cli():
+@click.option("--config", "config_path", default=None,
+              help="Path to config.yaml (alternative to passing it to each sub-command).")
+@click.pass_context
+def cli(ctx, config_path):
     """Job Profiler Tool — auto-tailor resumes and cover letters."""
+    if config_path is not None:
+        ctx.ensure_object(dict)
+        ctx.default_map = ctx.default_map or {}
+        for cmd in ("run", "list", "template"):
+            ctx.default_map.setdefault(cmd, {})["config_path"] = config_path
 
 
 @cli.command("list")
@@ -69,8 +77,17 @@ def list_jobs(config_path):
 @click.option("--config", "config_path", default="config.yaml", show_default=True)
 def set_template(provider_name, config_path):
     """Interactively choose and customize your resume template."""
-    config = load_config(config_path)
-    resolved_provider = provider_name or "local"
+    from pathlib import Path
+    if not Path(config_path).exists():
+        from src.setup_wizard import run_setup_wizard
+        config = run_setup_wizard(config_path)
+    else:
+        config = load_config(config_path)
+
+    resolved_provider = provider_name or config.get("provider", "local")
+
+    from src.setup_wizard import ensure_provider_ready
+    ensure_provider_ready(resolved_provider, config)
     run_template_wizard(config, resolved_provider)
 
 
@@ -103,15 +120,43 @@ def run_jobs(direct_url, resume_only, cover_only, provider_name, config_path, de
     if resume_only and cover_only:
         raise click.UsageError("Cannot use --resume-only and --cover-only together.")
 
-    config  = load_config(config_path)
+    from pathlib import Path
+
+    # --- First-run: config.yaml doesn't exist yet ---
+    if not Path(config_path).exists():
+        import src.setup_wizard as _sw
+        config = _sw.run_setup_wizard(config_path)
+        resolved_provider = provider_name or config.get("provider", "local")
+
+        resume_yaml = config["paths"]["resume_yaml"]
+        if not Path(resume_yaml).exists():
+            import src.onboarding as _ob
+            _ob.run_onboarding(config, resolved_provider)
+
+        template_yaml = config.get("paths", {}).get("template_yaml", "template.yaml")
+        if not Path(template_yaml).exists():
+            run_template_wizard(config, resolved_provider)
+
+        if not click.confirm("\nSetup complete! Ready to start the job search agent?", default=False):
+            click.echo("\nRun 'uv run python main.py run' when you're ready.\n")
+            return
+
+        from src.agent import run_agent_chat
+        run_agent_chat(config=config, provider_name=resolved_provider)
+        return
+
+    # --- Normal flow: config.yaml exists ---
+    config = load_config(config_path)
     if "template_yaml" not in config.get("paths", {}):
         config.setdefault("paths", {})["template_yaml"] = "template.yaml"
-    resume  = load_resume(config["paths"]["resume_yaml"])
 
     from src.providers import get_provider, resolve_models
-    resolved_provider = provider_name or "local"
+    resolved_provider = provider_name or config.get("provider", "local")
 
-    # --- Direct URL mode (existing pipeline, unchanged) ---
+    from src.setup_wizard import ensure_provider_ready
+    ensure_provider_ready(resolved_provider, config)
+
+    # --- Direct URL mode ---
     if direct_url:
         resume = load_resume(config["paths"]["resume_yaml"])
         llm_cfg = config["llm"]
@@ -138,7 +183,7 @@ def run_jobs(direct_url, resume_only, cover_only, provider_name, config_path, de
         click.echo(click.style(f"\n  Saved to: {folder}", fg="green"))
         return
 
-    # --- Agent mode (default when no --url) ---
+    # --- Agent mode ---
     from src.agent import run_agent_chat
     run_agent_chat(config=config, provider_name=resolved_provider)
 

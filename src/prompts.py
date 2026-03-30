@@ -190,6 +190,39 @@ You are a document generation assistant. Call the available tools to generate a
 tailored resume and cover letter for the given job URL, then report the result.
 """
 
+ONBOARDING_SECTION_PROMPTS: dict[str, str] = {
+    "basics": (
+        "Extract the candidate's basic personal information from the text provided. "
+        "Return JSON only matching the schema exactly. "
+        "Fields: name, email, phone, location, linkedin, github, website."
+    ),
+    "work": (
+        "Extract the candidate's work history from the text provided. "
+        "Return JSON only as {\"work\": [...]} where each entry has: "
+        "company, position, startDate, endDate, description, highlights (list of strings)."
+    ),
+    "education": (
+        "Extract the candidate's education history from the text provided. "
+        "Return JSON only as {\"education\": [...]} where each entry has: "
+        "institution, area, studyType, startDate, endDate, gpa."
+    ),
+    "skills": (
+        "Extract the candidate's skills from the text provided. "
+        "Return JSON only as {\"skills\": [...]} where each entry has: "
+        "name (category name) and keywords (list of strings)."
+    ),
+    "projects": (
+        "Extract the candidate's personal or portfolio projects from the text provided. "
+        "Return JSON only as {\"projects\": [...]} where each entry has: "
+        "name, description, highlights (list of strings), url, keywords (list of strings)."
+    ),
+    "certificates": (
+        "Extract the candidate's certifications and courses from the text provided. "
+        "Return JSON only as {\"certificates\": [...]} where each entry has: "
+        "name, date, issuer, url."
+    ),
+}
+
 TEMPLATE_EXTRACT_OVERRIDES = """\
 The user has chosen the {theme} resume template and wants to customize it.
 Extract any font name, font size, or color preferences from their message.
