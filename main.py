@@ -55,7 +55,7 @@ def cli(ctx, config_path):
 @click.option("--config", "config_path", default="config.yaml", show_default=True)
 def list_jobs(config_path):
     """List all jobs from the Google Sheet."""
-    from src.sheets import get_jobs
+    from src.sheets import get_jobs  # pylint: disable=import-outside-toplevel
     config = load_config(config_path)
     try:
         jobs = get_jobs(config)
@@ -79,7 +79,7 @@ def list_jobs(config_path):
 @click.option("--config", "config_path", default="config.yaml", show_default=True)
 def set_template(provider_name, config_path):
     """Interactively choose and customize your resume template."""
-    from pathlib import Path
+    from pathlib import Path  # pylint: disable=import-outside-toplevel
     if not Path(config_path).exists():
         from src.setup_wizard import run_setup_wizard
         config = run_setup_wizard(config_path)
@@ -122,17 +122,17 @@ def run_jobs(direct_url, resume_only, cover_only, provider_name, config_path, de
     if resume_only and cover_only:
         raise click.UsageError("Cannot use --resume-only and --cover-only together.")
 
-    from pathlib import Path
+    from pathlib import Path  # pylint: disable=import-outside-toplevel
 
     # --- First-run: config.yaml doesn't exist yet ---
     if not Path(config_path).exists():
-        import src.setup_wizard as _sw
+        import src.setup_wizard as _sw  # pylint: disable=import-outside-toplevel
         config = _sw.run_setup_wizard(config_path)
         resolved_provider = provider_name or config.get("provider", "local")
 
         resume_yaml = config["paths"]["resume_yaml"]
         if not Path(resume_yaml).exists():
-            import src.onboarding as _ob
+            import src.onboarding as _ob  # pylint: disable=import-outside-toplevel
             _ob.run_onboarding(config, resolved_provider)
 
         template_yaml = config.get("paths", {}).get("template_yaml", "template.yaml")
@@ -145,7 +145,7 @@ def run_jobs(direct_url, resume_only, cover_only, provider_name, config_path, de
             click.echo("\nRun 'uv run python main.py run' when you're ready.\n")
             return
 
-        from src.agent import run_agent_chat
+        from src.agent import run_agent_chat  # pylint: disable=import-outside-toplevel
         run_agent_chat(config=config, provider_name=resolved_provider)
         return
 
@@ -154,10 +154,10 @@ def run_jobs(direct_url, resume_only, cover_only, provider_name, config_path, de
     if "template_yaml" not in config.get("paths", {}):
         config.setdefault("paths", {})["template_yaml"] = "template.yaml"
 
-    from src.providers import get_provider, resolve_models
+    from src.providers import get_provider, resolve_models  # pylint: disable=import-outside-toplevel
     resolved_provider = provider_name or config.get("provider", "local")
 
-    from src.setup_wizard import ensure_provider_ready
+    from src.setup_wizard import ensure_provider_ready  # pylint: disable=import-outside-toplevel
     ensure_provider_ready(resolved_provider, config)
 
     # --- Direct URL mode ---
@@ -170,12 +170,12 @@ def run_jobs(direct_url, resume_only, cover_only, provider_name, config_path, de
             f"Provider: {resolved_provider}  |  model: {models[0]}  |  parser: {parser_models[0]}"
         )
 
-        from src.debug import init_db, log_run
+        from src.debug import init_db, log_run  # pylint: disable=import-outside-toplevel
         if debug:
             init_db()
             click.echo(click.style("  Debug mode enabled — logging to debug.db", fg="cyan"))
 
-        from src.pipeline import process_job
+        from src.pipeline import process_job  # pylint: disable=import-outside-toplevel
         job = {"url": direct_url, "job_title": "", "status": "", "details": "", "row": None}
         click.echo(f"\nProcessing: {direct_url}")
         debug_run_id = (
@@ -194,7 +194,7 @@ def run_jobs(direct_url, resume_only, cover_only, provider_name, config_path, de
         return
 
     # --- Agent mode ---
-    from src.agent import run_agent_chat
+    from src.agent import run_agent_chat  # pylint: disable=import-outside-toplevel
     run_agent_chat(config=config, provider_name=resolved_provider)
 
 
