@@ -24,3 +24,4 @@ debug.db
 .superpowers/
 docs/superpowers/plans/2026-03-28-custom-templates.md
 template.yaml
+.worktrees/
