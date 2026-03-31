@@ -48,7 +48,7 @@ class MemoryManager:
         try:
             self._client = Hindsight(base_url=base_url)
             self._available = True
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             print(
                 f"  [memory] Could not connect to Hindsight ({exc})"
                 " — running without persistent memory."
@@ -64,7 +64,7 @@ class MemoryManager:
             return
         try:
             self._client.retain(bank_id=self._bank_id, content=content, context=context)
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             # Silently ignore errors — memory is optional, agent continues without it
             return
 
@@ -77,7 +77,7 @@ class MemoryManager:
             if isinstance(result, list):
                 return "\n".join(str(r) for r in result)
             return str(result) if result else ""
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             return ""
 
     def reflect(self, query: str) -> str:
@@ -87,5 +87,5 @@ class MemoryManager:
         try:
             result = self._client.reflect(bank_id=self._bank_id, query=query)
             return str(result) if result else ""
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             return ""

@@ -12,8 +12,12 @@ from __future__ import annotations
 
 import click
 import yaml
+from pathlib import Path
 from dotenv import load_dotenv
 from src.template_agent import run_template_wizard
+from src.models import JobOptions, ProviderSuite
+from src.debug import log_run
+from src.agent import run_agent_chat
 
 load_dotenv()
 
@@ -81,16 +85,107 @@ def set_template(provider_name, config_path):
     """Interactively choose and customize your resume template."""
     from pathlib import Path  # pylint: disable=import-outside-toplevel
     if not Path(config_path).exists():
-        from src.setup_wizard import run_setup_wizard
+        from src.setup_wizard import run_setup_wizard  # pylint: disable=import-outside-toplevel
         config = run_setup_wizard(config_path)
     else:
         config = load_config(config_path)
 
     resolved_provider = provider_name or config.get("provider", "local")
 
-    from src.setup_wizard import ensure_provider_ready
+    from src.setup_wizard import ensure_provider_ready  # pylint: disable=import-outside-toplevel
     ensure_provider_ready(resolved_provider, config)
     run_template_wizard(config, resolved_provider)
+
+
+def _handle_deprecated_flags(row_num: int | None, run_all: bool, force: bool) -> None:
+    """Raise a UsageError if the user passes old flag versions."""
+    if row_num is not None or run_all or force:
+        raise click.UsageError(
+            "--row, --all, and --force are no longer supported.\n"
+            "Run without --url to use the new agent-driven search mode.\n"
+            "The Google Sheet is now an output log — the agent writes to it automatically."
+        )
+
+
+def _run_first_time_setup(config_path: str, provider_name: str | None) -> None:
+    """Run wizards and onboarding for fresh installations."""
+    import src.setup_wizard as _sw  # pylint: disable=import-outside-toplevel
+    import src.onboarding as _ob  # pylint: disable=import-outside-toplevel
+
+    config = _sw.run_setup_wizard(config_path)
+    resolved_provider = provider_name or config.get("provider", "local")
+
+    resume_yaml = config["paths"]["resume_yaml"]
+    if not Path(resume_yaml).exists():
+        _ob.run_onboarding(config, resolved_provider)
+
+    template_yaml = config.get("paths", {}).get("template_yaml", "template.yaml")
+    if not Path(template_yaml).exists():
+        run_template_wizard(config, resolved_provider)
+
+    if not click.confirm(
+        "\nSetup complete! Ready to start the job search agent?", default=False
+    ):
+        click.echo("\nRun 'uv run python main.py run' when you're ready.\n")
+        return
+
+    run_agent_chat(config=config, provider_name=resolved_provider)
+
+
+def _init_provider_for_run(
+    provider_name: str | None,
+    config: dict
+) -> "ProviderSuite":
+    """Initialize the LLM provider and models for a run."""
+    from src.providers import get_provider, resolve_models  # pylint: disable=import-outside-toplevel
+    from src.setup_wizard import ensure_provider_ready  # pylint: disable=import-outside-toplevel
+    from src.models import ProviderSuite  # pylint: disable=import-outside-toplevel
+
+    resolved_provider = provider_name or config.get("provider", "local")
+    ensure_provider_ready(resolved_provider, config)
+
+    llm_cfg = config["llm"]
+    provider = get_provider(resolved_provider, llm_cfg)
+    models, parser_models = resolve_models(resolved_provider, llm_cfg)
+
+    return ProviderSuite(
+        provider=provider,
+        models=models,
+        parser_models=parser_models,
+        name=resolved_provider
+    )
+
+
+def _run_direct_url_mode(
+    direct_url: str,
+    config: dict,
+    ps: "ProviderSuite",
+    options: "JobOptions",
+) -> None:
+    """Process a single job URL through the pipeline."""
+    from src.debug import init_db  # pylint: disable=import-outside-toplevel
+    from src.pipeline import process_job  # pylint: disable=import-outside-toplevel
+
+    click.echo(
+        f"Provider: {ps.name}  |  model: {ps.models[0]}  |  parser: {ps.parser_models[0]}"
+    )
+
+    if options.debug_run_id is not None:
+        init_db()
+        click.echo(click.style("  Debug mode enabled — logging to debug.db", fg="cyan"))
+
+    job = {"url": direct_url, "job_title": "", "status": "", "details": "", "row": None}
+    click.echo(f"\nProcessing: {direct_url}")
+    folder, _, resume_json = process_job(
+        job, config, load_resume(config["paths"]["resume_yaml"]),
+        provider_suite=ps,
+        options=options
+    )
+    if resume_json is not None:
+        click.echo(
+            f"  Priority: {resume_json.priority}/10 — {resume_json.priority_reasoning}"
+        )
+    click.echo(click.style(f"\n  Saved to: {folder}", fg="green"))
 
 
 @cli.command("run")
@@ -112,41 +207,15 @@ def set_template(provider_name, config_path):
 def run_jobs(direct_url, resume_only, cover_only, provider_name, config_path, debug,
              row_num, run_all, force):
     """Search for jobs with the agent, or process a single URL with --url."""
-    if row_num is not None or run_all or force:
-        raise click.UsageError(
-            "--row, --all, and --force are no longer supported.\n"
-            "Run without --url to use the new agent-driven search mode.\n"
-            "The Google Sheet is now an output log — the agent writes to it automatically."
-        )
+    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    _handle_deprecated_flags(row_num, run_all, force)
 
     if resume_only and cover_only:
         raise click.UsageError("Cannot use --resume-only and --cover-only together.")
 
-    from pathlib import Path  # pylint: disable=import-outside-toplevel
-
     # --- First-run: config.yaml doesn't exist yet ---
     if not Path(config_path).exists():
-        import src.setup_wizard as _sw  # pylint: disable=import-outside-toplevel
-        config = _sw.run_setup_wizard(config_path)
-        resolved_provider = provider_name or config.get("provider", "local")
-
-        resume_yaml = config["paths"]["resume_yaml"]
-        if not Path(resume_yaml).exists():
-            import src.onboarding as _ob  # pylint: disable=import-outside-toplevel
-            _ob.run_onboarding(config, resolved_provider)
-
-        template_yaml = config.get("paths", {}).get("template_yaml", "template.yaml")
-        if not Path(template_yaml).exists():
-            run_template_wizard(config, resolved_provider)
-
-        if not click.confirm(
-            "\nSetup complete! Ready to start the job search agent?", default=False
-        ):
-            click.echo("\nRun 'uv run python main.py run' when you're ready.\n")
-            return
-
-        from src.agent import run_agent_chat  # pylint: disable=import-outside-toplevel
-        run_agent_chat(config=config, provider_name=resolved_provider)
+        _run_first_time_setup(config_path, provider_name)
         return
 
     # --- Normal flow: config.yaml exists ---
@@ -154,47 +223,23 @@ def run_jobs(direct_url, resume_only, cover_only, provider_name, config_path, de
     if "template_yaml" not in config.get("paths", {}):
         config.setdefault("paths", {})["template_yaml"] = "template.yaml"
 
-    from src.providers import get_provider, resolve_models  # pylint: disable=import-outside-toplevel
-    resolved_provider = provider_name or config.get("provider", "local")
-
-    from src.setup_wizard import ensure_provider_ready  # pylint: disable=import-outside-toplevel
-    ensure_provider_ready(resolved_provider, config)
-
     # --- Direct URL mode ---
     if direct_url:
-        resume = load_resume(config["paths"]["resume_yaml"])
-        llm_cfg = config["llm"]
-        provider = get_provider(resolved_provider, llm_cfg)
-        models, parser_models = resolve_models(resolved_provider, llm_cfg)
-        click.echo(
-            f"Provider: {resolved_provider}  |  model: {models[0]}  |  parser: {parser_models[0]}"
-        )
-
-        from src.debug import init_db, log_run  # pylint: disable=import-outside-toplevel
+        ps = _init_provider_for_run(provider_name, config)
+        debug_run_id = None
         if debug:
-            init_db()
-            click.echo(click.style("  Debug mode enabled — logging to debug.db", fg="cyan"))
+            debug_run_id = log_run(direct_url, ps.name, ps.models[0], ps.parser_models[0])
 
-        from src.pipeline import process_job  # pylint: disable=import-outside-toplevel
-        job = {"url": direct_url, "job_title": "", "status": "", "details": "", "row": None}
-        click.echo(f"\nProcessing: {direct_url}")
-        debug_run_id = (
-            log_run(direct_url, resolved_provider, models[0], parser_models[0]) if debug else None
+        options = JobOptions(
+            resume_only=resume_only,
+            cover_only=cover_only,
+            debug_run_id=debug_run_id
         )
-        folder, _, resume_json = process_job(
-            job, config, resume, provider, models, parser_models,
-            resume_only=resume_only, cover_only=cover_only,
-            debug_run_id=debug_run_id,
-        )
-        if resume_json is not None:
-            click.echo(
-                f"  Priority: {resume_json.priority}/10 — {resume_json.priority_reasoning}"
-            )
-        click.echo(click.style(f"\n  Saved to: {folder}", fg="green"))
+        _run_direct_url_mode(direct_url, config, ps, options)
         return
 
     # --- Agent mode ---
-    from src.agent import run_agent_chat  # pylint: disable=import-outside-toplevel
+    resolved_provider = provider_name or config.get("provider", "local")
     run_agent_chat(config=config, provider_name=resolved_provider)
 
 

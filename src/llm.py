@@ -8,7 +8,7 @@ from pydantic import BaseModel, ValidationError
 import json_repair
 from src.models import JobDetails, ResumeJSON, CoverLetterJSON
 from src.prompts import RESUME_SYSTEM_PROMPT, COVER_LETTER_SYSTEM_PROMPT, JOB_PARSER_SYSTEM_PROMPT
-from src.providers import LLMProvider, _is_rate_error
+from src.providers import BaseProvider, _is_rate_error
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -25,7 +25,7 @@ def _parse_llm_response(model_class: Type[T], raw: str) -> T:
 
 def _call_with_retry(
     model_class: Type[T],
-    provider: LLMProvider,
+    provider: BaseProvider,
     llm_cfg: dict,
     system: str,
     prompt: str,
@@ -37,7 +37,7 @@ def _call_with_retry(
     - On rate/availability errors, skips immediately to the next fallback model.
     - Raises once all models and retries are exhausted.
     """
-    import click
+    import click  # pylint: disable=import-outside-toplevel
     max_retries = llm_cfg.get("max_retries", 3)
     temperature = llm_cfg.get("temperature", 0.3)
     last_error: Exception = RuntimeError("No attempts made.")
@@ -48,7 +48,7 @@ def _call_with_retry(
                 raw = provider.call(
                     model=model, system=system, prompt=prompt, temperature=temperature
                 )
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 last_error = e
                 if _is_rate_error(e) and i < len(models) - 1:
                     click.echo(
@@ -67,7 +67,7 @@ def _call_with_retry(
 
             try:
                 return _parse_llm_response(model_class, raw)
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 last_error = e
                 if attempt < max_retries:
                     click.echo(
@@ -116,7 +116,7 @@ def _format_job_details(details: JobDetails) -> str:
 
 
 def parse_job_description(
-    job: dict, config: dict, provider: LLMProvider, parser_models: list[str]
+    job: dict, config: dict, provider: BaseProvider, parser_models: list[str]
 ) -> JobDetails:
     """Use a lightweight model to extract structured details from the raw page content."""
     prompt = f"""JOB TITLE (from URL/sheet): {job.get('title', job.get('job_title', ''))}
@@ -131,7 +131,7 @@ RAW PAGE CONTENT:
 
 
 def generate_resume(
-    job_details: JobDetails, resume: dict, config: dict, provider: LLMProvider, models: list[str]
+    job_details: JobDetails, resume: dict, config: dict, provider: BaseProvider, models: list[str]
 ) -> ResumeJSON:
     """Produce a tailored ResumeJSON for the given job."""
     prompt = f"""{_format_job_details(job_details)}
@@ -151,7 +151,7 @@ def generate_cover_letter(
     resume: dict,
     resume_json: ResumeJSON,
     config: dict,
-    provider: LLMProvider,
+    provider: BaseProvider,
     models: list[str],
 ) -> CoverLetterJSON:
     """Produce a tailored CoverLetterJSON."""

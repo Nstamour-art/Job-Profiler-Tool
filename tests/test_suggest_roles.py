@@ -102,7 +102,7 @@ def test_suggest_roles_handles_llm_error(tmp_path):
         tool = create_suggest_roles_tool(config, MagicMock(), ["parser-model"])
         result = tool.invoke({})
 
-    assert "Could not suggest roles" in result
+    assert "Failed to suggest roles" in result
     assert "LLM down" in result
 
 

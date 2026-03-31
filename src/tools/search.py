@@ -16,7 +16,7 @@ from src.prompts import SEARCH_SUBAGENT_SYSTEM_PROMPT
 
 def create_search_tool(agent_model, tavily_api_key: str, max_jobs: int = 10):
     """Return a search_jobs LangChain tool that uses a Tavily search sub-agent."""
-    from langchain_tavily import TavilySearch
+    from langchain_tavily import TavilySearch  # pylint: disable=import-outside-toplevel
 
     tavily = TavilySearch(max_results=30, tavily_api_key=tavily_api_key)
     system_prompt = SEARCH_SUBAGENT_SYSTEM_PROMPT.replace("{max_jobs}", str(max_jobs))
@@ -43,7 +43,7 @@ def create_search_tool(agent_model, tavily_api_key: str, max_jobs: int = 10):
                 "messages": [{"role": "user", "content": preferences_summary}]
             })
             return result["messages"][-1].content
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             return f"Search failed: {exc}"
 
     return search_jobs

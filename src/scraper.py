@@ -69,9 +69,12 @@ def _clean_text(text: str) -> str:
 def _try_selectors(page, selectors: list[str]):
     """Return the first matching element handle, or None."""
     for sel in selectors:
-        el = page.query_selector(sel)
-        if el:
-            return el
+        try:
+            el = page.query_selector(sel)
+            if el:
+                return el
+        except Exception:  # pylint: disable=broad-exception-caught
+            continue
     return None
 
 
@@ -79,7 +82,7 @@ def _dismiss_modals(page) -> None:
     """Attempt to dismiss common login/cookie modals without crashing."""
     try:
         page.keyboard.press("Escape")
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         pass
 
     dismiss_selectors = [
@@ -99,7 +102,7 @@ def _dismiss_modals(page) -> None:
             if btn and btn.is_visible():
                 btn.click()
                 break
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             continue
 
 
@@ -154,7 +157,7 @@ def scrape_job(url: str) -> dict:
         else:
             try:
                 raw_text = page.inner_text("body")
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 browser.close()
                 raise ScraperError(f"Could not extract page text from {url}: {e}") from e
 
