@@ -65,7 +65,8 @@ class MemoryManager:
         try:
             self._client.retain(bank_id=self._bank_id, content=content, context=context)
         except Exception:
-            pass
+            # Silently ignore errors — memory is optional, agent continues without it
+            return
 
     def recall(self, query: str) -> str:
         """Retrieve memories relevant to the query. Returns empty string if unavailable."""
