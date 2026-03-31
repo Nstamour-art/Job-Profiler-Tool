@@ -1,6 +1,5 @@
 from unittest.mock import MagicMock, patch
 import json
-import pytest
 
 
 def test_search_tool_returns_job_list():

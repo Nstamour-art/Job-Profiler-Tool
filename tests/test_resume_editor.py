@@ -1,5 +1,4 @@
 import yaml
-import pytest
 
 
 def test_read_resume_section_returns_section(tmp_path, sample_resume):
@@ -29,7 +28,7 @@ def test_write_resume_section_persists_change(tmp_path, sample_resume):
     resume_path.write_text(yaml.dump(sample_resume), encoding="utf-8")
 
     from src.tools.resume_editor import create_resume_tools
-    read_tool, write_tool = create_resume_tools(str(resume_path))
+    _, write_tool = create_resume_tools(str(resume_path))
 
     new_certs = [{"name": "AWS Solutions Architect", "issuer": "Amazon Web Services"}]
     write_tool.invoke({"section": "certificates", "new_content": yaml.dump(new_certs)})

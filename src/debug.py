@@ -89,7 +89,7 @@ def init_db() -> None:
     conn.close()
 
 
-def log_run(url: str, provider: str, model: str, parser_model: str) -> int:
+def log_run(url: str, provider: str, model: str, parser_model: str) -> int | None:
     """Insert a new run row and return its id."""
     conn = _connect()
     cur = conn.execute(

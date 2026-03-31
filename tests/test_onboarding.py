@@ -1,11 +1,9 @@
 # tests/test_onboarding.py
 import yaml
-import pytest
 from unittest.mock import patch, MagicMock
 
 from src.resume_models import (
     BasicsSection, WorkSection, WorkEntry,
-    EducationSection, SkillsSection, ProjectsSection, CertificatesSection,
 )
 
 
@@ -182,7 +180,7 @@ def test_interview_section_edit_reextraction_failure_keeps_original(sample_confi
 
     call_count = {"n": 0}
 
-    def fake_extract(*args, **kwargs):
+    def fake_extract(*_args, **_kwargs):
         call_count["n"] += 1
         if call_count["n"] == 1:
             return original

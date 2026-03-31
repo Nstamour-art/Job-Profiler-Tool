@@ -570,7 +570,7 @@ def _cover_bullet(doc: "DocxDocument", text: str, cover_pt: int = COVER_PT,
 
 
 def build_cover_letter(cover_json: CoverLetterJSON, personal: dict,
-                       company: str, job_title: str, output_path: str,
+                       company: str, _job_title: str, output_path: str,
                        theme: ThemeConfig = CLASSIC):
     doc = Document()
     cover_pt = theme.body_pt + 2

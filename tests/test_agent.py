@@ -1,5 +1,4 @@
 from unittest.mock import MagicMock, patch
-import pytest
 
 
 def test_build_agent_returns_compiled_graph(sample_config, sample_resume):
@@ -28,7 +27,7 @@ def test_build_agent_system_prompt_includes_candidate_name(sample_config, sample
     """The system prompt injected into the agent includes the candidate's name."""
     captured = {}
 
-    def fake_create(model, tools, system_prompt):
+    def fake_create(model, tools, system_prompt):  # pylint: disable=unused-argument
         captured["prompt"] = system_prompt
         return MagicMock()
 

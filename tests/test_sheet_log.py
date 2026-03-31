@@ -1,5 +1,4 @@
-from unittest.mock import patch, MagicMock
-import pytest
+from unittest.mock import patch
 
 
 def test_log_job_to_sheet_calls_append(sample_config):

@@ -3,7 +3,7 @@ import yaml
 import pytest
 from unittest.mock import patch, MagicMock
 
-from src.themes import CLASSIC, MODERN, CREATIVE, MINIMAL, ThemeConfig
+from src.themes import CLASSIC, MODERN
 
 
 @pytest.fixture

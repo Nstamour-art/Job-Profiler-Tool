@@ -1,10 +1,8 @@
 """Tests for src/setup_wizard.py — provider utilities and ensure_provider_ready."""
 from __future__ import annotations
 
-import os
 import pytest
 import yaml
-from pathlib import Path
 from unittest.mock import patch
 from click.testing import CliRunner
 

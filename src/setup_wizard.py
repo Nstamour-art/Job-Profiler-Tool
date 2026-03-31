@@ -74,7 +74,7 @@ def _prompt_for_api_key(provider_name: str, key_var: str, env_path: str = ".env"
 
 
 def ensure_provider_ready(
-    provider_name: str, config: dict, env_path: str = ".env"
+    provider_name: str, _config: dict, env_path: str = ".env"
 ) -> None:
     """Verify the requested provider is usable; prompt for setup if not.
 

@@ -1,5 +1,4 @@
 from unittest.mock import MagicMock, patch
-import pytest
 
 
 def test_process_job_uses_cached_description(sample_config, sample_resume, tmp_path):
@@ -27,7 +26,7 @@ def test_process_job_uses_cached_description(sample_config, sample_resume, tmp_p
          patch("src.pipeline.build_resume"), \
          patch("src.pipeline.build_cover_letter"):
         from src.pipeline import process_job
-        folder, job_data, resume_json = process_job(
+        _, job_data, resume_json = process_job(
             job, sample_config, sample_resume,
             provider=MagicMock(), models=["m"], parser_models=["m"],
         )
@@ -36,13 +35,11 @@ def test_process_job_uses_cached_description(sample_config, sample_resume, tmp_p
     assert resume_json.priority == 3
 
 
-def test_process_job_uses_classic_when_no_template_yaml(tmp_path, monkeypatch):
+def test_process_job_uses_classic_when_no_template_yaml(tmp_path, monkeypatch):  # pylint: disable=unused-argument
     """process_job falls back to CLASSIC when template.yaml is missing."""
-    from src.themes import CLASSIC
-
     captured_theme = {}
 
-    def fake_build_resume(*args, **kwargs):
+    def fake_build_resume(*_args, **kwargs):
         captured_theme["theme"] = kwargs.get("theme")
         return "/fake/path"
 

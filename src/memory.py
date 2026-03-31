@@ -33,7 +33,7 @@ def _resolve_bank_id(config: dict, resume: dict) -> str:
 class MemoryManager:
     """Thin wrapper around Hindsight retain/recall for the job search agent."""
 
-    def __init__(self, config: dict, resume: dict, provider_name: str) -> None:
+    def __init__(self, config: dict, resume: dict, provider_name: str) -> None:  # pylint: disable=unused-argument
         self._bank_id = _resolve_bank_id(config, resume)
         self._available = False
         self._client = None
