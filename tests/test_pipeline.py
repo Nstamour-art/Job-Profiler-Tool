@@ -1,4 +1,5 @@
 from unittest.mock import MagicMock, patch
+from src.models import ProviderSuite
 
 
 def test_process_job_uses_cached_description(sample_config, sample_resume, tmp_path):
@@ -26,10 +27,8 @@ def test_process_job_uses_cached_description(sample_config, sample_resume, tmp_p
          patch("src.pipeline.build_resume"), \
          patch("src.pipeline.build_cover_letter"):
         from src.pipeline import process_job
-        _, job_data, resume_json = process_job(
-            job, sample_config, sample_resume,
-            provider=MagicMock(), models=["m"], parser_models=["m"],
-        )
+        ps = ProviderSuite(provider=MagicMock(), models=["m"], parser_models=["m"], name="local")
+        _, job_data, resume_json = process_job(job, sample_config, sample_resume, ps)
 
     assert not job_data["_scraped_fresh"]
     assert resume_json.priority == 3
@@ -68,7 +67,8 @@ def test_process_job_uses_classic_when_no_template_yaml(tmp_path, monkeypatch): 
          patch("src.pipeline.build_resume", side_effect=fake_build_resume), \
          patch("src.pipeline.build_cover_letter"):
         from src.pipeline import process_job
-        process_job(job, config, resume, MagicMock(), ["m"], ["m"])
+        ps = ProviderSuite(provider=MagicMock(), models=["m"], parser_models=["m"], name="local")
+        process_job(job, config, resume, ps)
 
     assert captured_theme.get("theme") is not None
     assert captured_theme["theme"].name == "classic"

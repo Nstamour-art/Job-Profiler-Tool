@@ -8,10 +8,16 @@ tools, and runs the interactive chat loop.
 from __future__ import annotations
 import os
 import uuid
+import yaml
 from pathlib import Path
-
+from typing import TYPE_CHECKING
 from deepagents import create_deep_agent
 from langchain.chat_models import init_chat_model
+from langchain_core.runnables import RunnableConfig
+from langchain_core.tools import tool as lc_tool
+
+if TYPE_CHECKING:
+    from src.models import ProviderSuite
 
 from src.memory import MemoryManager
 from src.onboarding import run_onboarding
@@ -26,8 +32,7 @@ from src.tools.suggest_roles import create_suggest_roles_tool
 
 
 def _create_change_template_tool(config: dict, provider_name: str):
-    from langchain_core.tools import tool as lc_tool
-
+    """Return a change_template tool."""
     @lc_tool
     def change_template() -> str:
         """Let the user interactively choose a new resume template.
@@ -37,7 +42,7 @@ def _create_change_template_tool(config: dict, provider_name: str):
         try:
             theme = run_template_wizard(config, provider_name)
             return f"Template updated to {theme.name.capitalize()}."
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             return f"Template change failed: {exc}"
 
     return change_template
@@ -53,31 +58,41 @@ _LANGCHAIN_PREFIX: dict[str, str] = {
 
 
 def _langchain_model_string(provider_name: str, config: dict) -> tuple[str, str]:
+    """Return the LangChain model provider and model name."""
     prefix = _LANGCHAIN_PREFIX.get(provider_name, "ollama")
     models, _ = resolve_models(provider_name, config["llm"])
     return prefix, models[0]
 
 
-def build_agent(config: dict, resume: dict, provider_name: str, recalled_memories: str):
-    """Construct and return the compiled Deep Agents orchestrator graph.
-
-    Separated from run_agent_chat so it can be unit-tested without a chat loop.
-    """
-    prefix, model_name = _langchain_model_string(provider_name, config)
-    agent_model = init_chat_model(model=model_name, model_provider=prefix)
-
+def _init_tools(
+    agent_model,
+    config: dict,
+    resume: dict,
+    provider_name: str,
+):
+    """Initialize and return all tools for the agent."""
     tavily_api_key = os.environ.get("TAVILY_API_KEY", "")
     max_jobs = config.get("agent", {}).get("max_jobs", 10)
 
     models, parser_models = resolve_models(provider_name, config["llm"])
     provider = get_provider(provider_name, config["llm"])
 
-    search_tool = create_search_tool(agent_model, tavily_api_key, max_jobs)
-    generate_tool = create_generate_tool(config, resume, provider, models, parser_models)
-    read_resume, write_resume = create_resume_tools(config["paths"]["resume_yaml"])
-    sheet_log_tool = create_sheet_log_tool(config)
-    change_template_tool = _create_change_template_tool(config, provider_name)
-    suggest_roles_tool = create_suggest_roles_tool(config, provider, parser_models)
+    return [
+        create_search_tool(agent_model, tavily_api_key, max_jobs),
+        create_generate_tool(config, resume, provider, models, parser_models),
+        *create_resume_tools(config["paths"]["resume_yaml"]),
+        create_sheet_log_tool(config),
+        _create_change_template_tool(config, provider_name),
+        create_suggest_roles_tool(config, provider, parser_models)
+    ]
+
+
+def build_agent(config: dict, resume: dict, provider_name: str, recalled_memories: str):
+    """Construct and return the compiled Deep Agents orchestrator graph."""
+    prefix, model_name = _langchain_model_string(provider_name, config)
+    agent_model = init_chat_model(model=model_name, model_provider=prefix)
+
+    tools = _init_tools(agent_model, config, resume, provider_name)
 
     system_prompt = AGENT_SYSTEM_PROMPT_TEMPLATE.format(
         candidate_name=resume["basics"]["name"],
@@ -87,40 +102,35 @@ def build_agent(config: dict, resume: dict, provider_name: str, recalled_memorie
 
     return create_deep_agent(
         model=agent_model,
-        tools=[search_tool, generate_tool, read_resume, write_resume,
-                sheet_log_tool, change_template_tool, suggest_roles_tool],
+        tools=tools,
         system_prompt=system_prompt,
     )
 
 
+def _recall_memories(memory: MemoryManager) -> str:
+    """Recall preferences and history from the MemoryManager."""
+    recalled_prefs = memory.recall("What are this user's job search preferences?")
+    recalled_jobs = memory.recall("What jobs has this user already been shown?")
+    return "\n".join(filter(None, [recalled_prefs, recalled_jobs]))
+
+
 def run_agent_chat(config: dict, provider_name: str) -> None:
-    """Start the interactive chat loop with the job search agent.
-
-    If resume.yaml does not exist, runs the onboarding interview first.
-    """
-    import yaml as _yaml
-
+    """Start the interactive chat loop with the job search agent."""
     resume_path = config["paths"]["resume_yaml"]
     if not Path(resume_path).exists():
         resume = run_onboarding(config, provider_name)
     else:
         with open(resume_path, encoding="utf-8") as f:
-            resume = _yaml.safe_load(f)
+            resume = yaml.safe_load(f)
 
     memory = MemoryManager(config=config, resume=resume, provider_name=provider_name)
     memory.start()
 
-    recalled_prefs = memory.recall("What are this user's job search preferences?")
-    recalled_jobs = memory.recall("What jobs has this user already been shown?")
-    recalled_memories = "\n".join(filter(None, [recalled_prefs, recalled_jobs]))
-
-    from langchain_core.runnables import RunnableConfig
-
-    agent = build_agent(config, resume, provider_name, recalled_memories)
+    recalled = _recall_memories(memory)
+    agent = build_agent(config, resume, provider_name, recalled)
     thread_config = {"thread_id": str(uuid.uuid4())}
 
     print("\nJob Search Agent ready. Type 'exit' to quit.\n")
-
     history: list[dict] = []
 
     try:
@@ -139,22 +149,31 @@ def run_agent_chat(config: dict, provider_name: str) -> None:
                 continue
 
             history.append({"role": "user", "content": user_input})
-
             print("Job Agent: ", end="", flush=True)
+
             try:
-                result = agent.invoke({"messages": history}, config=RunnableConfig(configurable=thread_config))
-                last_msg = result["messages"][-1]
-                response_text = (
-                    last_msg.content[0]["text"] if isinstance(last_msg.content, list) and len(last_msg.content) > 0 and "text" in last_msg.content[0]
-                    else str(last_msg.content) if isinstance(last_msg.content, str)
-                    else ""
+                result = agent.invoke(
+                    {"messages": history},
+                    config=RunnableConfig(configurable=thread_config)
                 )
+                last_msg = result["messages"][-1]
+                response_text = _extract_response(last_msg)
                 history = result["messages"]
                 memory.retain(
                     f"User said: {user_input}\nJob Agent responded: {response_text[:300]}",
                     context="conversation",
                 )
-            except Exception as exc:
-                print(f"\n[Job Agent error: {exc}]")
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                print(f"Error: {e}")
     finally:
         memory.stop()
+
+
+def _extract_response(message) -> str:
+    """Helper to extract text from a LangChain message object."""
+    if isinstance(message.content, list) and len(message.content) > 0:
+        if "text" in message.content[0]:
+            return message.content[0]["text"]
+    elif isinstance(message.content, str):
+        return str(message.content)
+    return ""

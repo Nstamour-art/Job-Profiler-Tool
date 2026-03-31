@@ -1,5 +1,4 @@
-"""Pydantic models for structured LLM output: job details, resume, cover letter, suggestions."""
-
+from typing import Any, Optional
 from pydantic import BaseModel
 
 
@@ -71,3 +70,44 @@ class SuggestedRole(BaseModel):
 class SuggestedRoles(BaseModel):
     """A list of job title suggestions for the candidate."""
     roles: list[SuggestedRole]
+
+
+class JobOptions(BaseModel):
+    """Configuration options for a single job processing run."""
+    resume_only: bool = False
+    cover_only: bool = False
+    debug_run_id: int | None = None
+
+
+class ProviderSuite(BaseModel):
+    """Groups an LLM provider with its primary and fallback models."""
+    provider: Any   # src.providers.BaseProvider
+    models: list[str]
+    parser_models: list[str]
+    name: str       # "local", "openai", etc.
+
+
+class PipelineContext(BaseModel):
+    """Orchestration context for the job processing pipeline."""
+    config: dict
+    resume: dict
+    provider_suite: ProviderSuite
+    options: JobOptions
+
+
+class PipelineResults(BaseModel):
+    """Encapsulates the generated content from the pipeline."""
+    job_details: Any  # JobDetails
+    resume_json: Any  # ResumeJSON | None
+    cover_json: Any   # CoverLetterJSON | None
+
+
+class JobRow(BaseModel):
+    """Data object for a single row in the Google Sheet."""
+    title: str
+    company: str
+    url: str
+    status: str
+    date_found: str
+    priority: str = ""
+    reasoning: str = ""

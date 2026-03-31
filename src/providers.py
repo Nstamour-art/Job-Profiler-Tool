@@ -4,6 +4,7 @@ LLM provider implementations.
 Each provider wraps a different backend SDK and exposes a single .call() method.
 The factory function get_provider() returns the right instance based on the --provider CLI flag.
 """
+# pylint: disable=too-few-public-methods,no-member
 
 import os
 from abc import ABC, abstractmethod
@@ -20,20 +21,26 @@ def _require_key(env_var: str, provider: str) -> str:
     return value
 
 
-class LLMProvider(ABC):
+class BaseProvider(ABC):
+    """Abstract base class for all LLM providers.
+
+    All subclasses must implement the .call() method.
+    """
+
     @abstractmethod
-    def call(self, model: str, system: str, prompt: str, temperature: float) -> str: ...
+    def call(self, model: str, system: str, prompt: str, temperature: float) -> str:
+        """Execute a chat completion request."""
 
 
 # ---------------------------------------------------------------------------
 # Ollama — local (default, no API key required)
 # ---------------------------------------------------------------------------
 
-class LocalOllamaProvider(LLMProvider):
+class LocalOllamaProvider(BaseProvider):
     """Uses the ollama.generate() function against a locally running Ollama server."""
 
     def call(self, model: str, system: str, prompt: str, temperature: float) -> str:
-        from ollama import generate
+        from ollama import generate  # pylint: disable=import-outside-toplevel
         response = generate(
             model=model,
             prompt=prompt,
@@ -41,18 +48,18 @@ class LocalOllamaProvider(LLMProvider):
             format="json",
             options={"temperature": temperature},
         )
-        return response.response
+        return str(response.response)
 
 
 # ---------------------------------------------------------------------------
 # Ollama Cloud (requires OLLAMA_API_KEY)
 # ---------------------------------------------------------------------------
 
-class OllamaCloudProvider(LLMProvider):
+class OllamaCloudProvider(BaseProvider):
     """Uses the ollama.Client against Ollama Cloud with bearer-token auth."""
 
     def __init__(self, host: str) -> None:
-        from ollama import Client
+        from ollama import Client  # pylint: disable=import-outside-toplevel
         api_key = _require_key("OLLAMA_API_KEY", "cloud")
         self._client = Client(
             host=host,
@@ -69,19 +76,21 @@ class OllamaCloudProvider(LLMProvider):
             format="json",
             options={"temperature": temperature},
         )
-        return response.message.content or ""
+        if response.message and response.message.content:
+            return str(response.message.content)
+        return ""
 
 
 # ---------------------------------------------------------------------------
 # OpenAI (requires OPENAI_API_KEY)
 # ---------------------------------------------------------------------------
 
-class OpenAIProvider(LLMProvider):
+class OpenAIProvider(BaseProvider):
     """OpenAI chat completions provider (requires OPENAI_API_KEY)."""
 
     def __init__(self) -> None:
         try:
-            from openai import OpenAI
+            from openai import OpenAI  # pylint: disable=import-outside-toplevel
         except ImportError as exc:
             raise ImportError("OpenAI SDK not installed. Run: uv add openai") from exc
         self._client = OpenAI(api_key=_require_key("OPENAI_API_KEY", "openai"))
@@ -96,25 +105,25 @@ class OpenAIProvider(LLMProvider):
             response_format={"type": "json_object"},
             temperature=temperature,
         )
-        return response.choices[0].message.content or ""
+        return str(response.choices[0].message.content or "")
 
 
 # ---------------------------------------------------------------------------
 # Anthropic (requires ANTHROPIC_API_KEY)
 # ---------------------------------------------------------------------------
 
-class AnthropicProvider(LLMProvider):
+class AnthropicProvider(BaseProvider):
     """Anthropic Messages API provider (requires ANTHROPIC_API_KEY)."""
 
     def __init__(self) -> None:
         try:
-            import anthropic
+            import anthropic  # pylint: disable=import-outside-toplevel
         except ImportError as exc:
             raise ImportError("Anthropic SDK not installed. Run: uv add anthropic") from exc
         self._client = anthropic.Anthropic(api_key=_require_key("ANTHROPIC_API_KEY", "anthropic"))
 
     def call(self, model: str, system: str, prompt: str, temperature: float) -> str:
-        from anthropic.types import TextBlock
+        from anthropic.types import TextBlock  # pylint: disable=import-outside-toplevel
         response = self._client.messages.create(
             model=model,
             max_tokens=8096,
@@ -124,7 +133,7 @@ class AnthropicProvider(LLMProvider):
         )
         for content_block in response.content:
             if isinstance(content_block, TextBlock):
-                return content_block.text or ""
+                return str(content_block.text or "")
         return ""
 
 
@@ -132,18 +141,18 @@ class AnthropicProvider(LLMProvider):
 # Google Gemini (requires GEMINI_API_KEY)
 # ---------------------------------------------------------------------------
 
-class GeminiProvider(LLMProvider):
+class GeminiProvider(BaseProvider):
     """Google Gemini provider via google-genai SDK (requires GEMINI_API_KEY)."""
 
     def __init__(self) -> None:
         try:
-            from google import genai
+            from google import genai  # pylint: disable=import-outside-toplevel
         except ImportError as exc:
             raise ImportError("Google GenAI SDK not installed. Run: uv add google-genai") from exc
         self._client = genai.Client(api_key=_require_key("GEMINI_API_KEY", "gemini"))
 
     def call(self, model: str, system: str, prompt: str, temperature: float) -> str:
-        from google.genai import types
+        from google.genai import types  # pylint: disable=import-outside-toplevel
         response = self._client.models.generate_content(
             model=model,
             contents=prompt,
@@ -153,7 +162,7 @@ class GeminiProvider(LLMProvider):
                 temperature=temperature,
             ),
         )
-        return response.text or ""
+        return str(response.text or "")
 
 
 # ---------------------------------------------------------------------------
@@ -176,7 +185,7 @@ def _is_rate_error(exc: Exception) -> bool:
     return any(signal in msg for signal in _RATE_ERROR_SIGNALS)
 
 
-def get_provider(name: str, llm_cfg: dict) -> LLMProvider:
+def get_provider(name: str, llm_cfg: dict) -> BaseProvider:
     """Instantiate and return the LLM provider for the given name."""
     match name:
         case "local":

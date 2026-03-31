@@ -6,9 +6,11 @@ from __future__ import annotations
 import getpass
 import os
 import urllib.request
+import urllib.error
 from pathlib import Path
 
 import yaml
+from pydantic import ValidationError
 
 # Maps provider name → environment variable name for its API key.
 _API_KEY_VARS: dict[str, str] = {
@@ -45,7 +47,7 @@ def _ollama_reachable() -> bool:
     try:
         with urllib.request.urlopen("http://localhost:11434/", timeout=2):
             return True
-    except Exception:
+    except (OSError, urllib.error.URLError, ConnectionError, TimeoutError):
         return False
 
 
@@ -61,7 +63,7 @@ def _append_env(key: str, value: str, env_path: str = ".env") -> None:
 
 def _prompt_for_api_key(provider_name: str, key_var: str, env_path: str = ".env") -> str:
     """Prompt for an API key, write it to .env, and reload dotenv in the current process."""
-    from dotenv import load_dotenv
+    from dotenv import load_dotenv  # pylint: disable=import-outside-toplevel
     url = _API_KEY_URLS.get(provider_name, "")
     print(f"\n  Get your {provider_name.capitalize()} API key at: {url}")
     key = getpass.getpass(f"  Enter {provider_name.capitalize()} API key: ").strip()

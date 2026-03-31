@@ -13,10 +13,10 @@ def test_log_job_to_sheet_calls_append(sample_config):
         })
 
     mock_append.assert_called_once()
-    kwargs = mock_append.call_args[1]
-    assert kwargs["title"] == "AI Engineer"
-    assert kwargs["company"] == "Acme Corp"
-    assert kwargs["status"] == "Seen"
+    call_kwargs = mock_append.call_args.kwargs
+    assert call_kwargs["job_row"].title == "AI Engineer"
+    assert call_kwargs["job_row"].company == "Acme Corp"
+    assert call_kwargs["job_row"].status == "Seen"
 
 
 def test_log_job_to_sheet_handles_sheet_error(sample_config):
@@ -31,4 +31,4 @@ def test_log_job_to_sheet_handles_sheet_error(sample_config):
             "status": "Seen",
         })
 
-    assert "Sheet logging unavailable" in result
+    assert "Sheet logging failed" in result

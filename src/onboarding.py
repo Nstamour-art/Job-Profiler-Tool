@@ -10,7 +10,10 @@ After all 6 sections, resume.yaml is written and the dict is returned.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.models import ProviderSuite
 
 import yaml
 
@@ -51,8 +54,7 @@ _OPENING_PROMPTS: dict[str, str] = {
 def extract_section(
     section: str,
     raw_input: str,
-    provider,
-    parser_models: list[str],
+    provider_suite: "ProviderSuite",
     llm_cfg: dict,
     correction: str | None = None,
 ) -> Any:
@@ -68,7 +70,10 @@ def extract_section(
 
     system_prompt = ONBOARDING_SECTION_PROMPTS[section]
     model_class = SECTION_MODEL_MAP[section]
-    return _call_with_retry(model_class, provider, llm_cfg, system_prompt, user_text, parser_models)
+    return _call_with_retry(
+        model_class, provider_suite.provider, llm_cfg,
+        system_prompt, user_text, provider_suite.parser_models
+    )
 
 
 def _section_to_dict(section: str, extracted: Any) -> Any:
@@ -94,8 +99,7 @@ def _format_extracted(section: str, extracted: Any) -> str:
 
 def _interview_section(
     section: str,
-    provider: Any,
-    parser_models: list[str],
+    provider_suite: "ProviderSuite",
     llm_cfg: dict,
 ) -> Any:
     """Run the interactive loop for one section. Returns the confirmed plain dict or list."""
@@ -110,8 +114,8 @@ def _interview_section(
             return _empty_section(section)
 
         try:
-            extracted = extract_section(section, raw, provider, parser_models, llm_cfg)
-        except Exception as exc:
+            extracted = extract_section(section, raw, provider_suite, llm_cfg)
+        except RuntimeError as exc:
             print(f"  Extraction failed: {exc}. Please try again.\n")
             continue
 
@@ -123,18 +127,18 @@ def _interview_section(
             answer = input("Does this look right? (yes / edit / skip) > ").strip().lower()
             if answer == "yes":
                 return _section_to_dict(section, extracted)
-            elif answer == "skip":
+            if answer == "skip":
                 print(f"  Skipping {section}.\n")
                 return _empty_section(section)
-            elif answer == "edit":
+            if answer == "edit":
                 correction = input("What should be changed? > ").strip()
                 if not correction:
                     continue
                 try:
                     extracted = extract_section(
-                        section, raw, provider, parser_models, llm_cfg, correction=correction
+                        section, raw, provider_suite, llm_cfg, correction=correction
                     )
-                except Exception as exc:
+                except Exception as exc:  # pylint: disable=broad-exception-caught
                     print(f"  Re-extraction failed: {exc}. Keeping previous result.\n")
                 else:
                     print(f"\nUpdated {section}:\n")
@@ -149,10 +153,17 @@ def run_onboarding(config: dict, provider_name: str) -> dict:
 
     Writes resume.yaml to config["paths"]["resume_yaml"] before returning.
     """
-    from src.providers import get_provider, resolve_models
+    from src.providers import get_provider, resolve_models  # pylint: disable=import-outside-toplevel
+    from src.models import ProviderSuite  # pylint: disable=import-outside-toplevel
 
     provider = get_provider(provider_name, config["llm"])
-    _, parser_models = resolve_models(provider_name, config["llm"])
+    models, parser_models = resolve_models(provider_name, config["llm"])
+    ps = ProviderSuite(
+        provider=provider,
+        models=models,
+        parser_models=parser_models,
+        name=provider_name
+    )
     llm_cfg = config["llm"]
 
     print("\nWelcome! No resume.yaml found. Let's build it together.")
@@ -160,7 +171,7 @@ def run_onboarding(config: dict, provider_name: str) -> dict:
 
     sections: dict[str, Any] = {}
     for section in SECTION_ORDER:
-        sections[section] = _interview_section(section, provider, parser_models, llm_cfg)
+        sections[section] = _interview_section(section, ps, llm_cfg)
 
     resume = {section: sections[section] for section in SECTION_ORDER}
 

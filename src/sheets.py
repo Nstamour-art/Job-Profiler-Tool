@@ -4,6 +4,12 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.models import JobRow
+
+
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive.readonly",
@@ -68,13 +74,7 @@ def update_status(config: dict, row: int, status: str) -> None:
 
 def append_job_row(
     config: dict,
-    title: str,
-    company: str,
-    url: str,
-    status: str,
-    date_found: str,
-    priority: str = "",
-    reasoning: str = "",
+    job_row: "JobRow",
 ) -> None:
     """Append a new job row to the sheet.
 
@@ -86,13 +86,13 @@ def append_job_row(
 
     row = [""] * len(headers)
     field_map = {
-        "job_title": title,
-        "company": company,
-        "url": url,
-        "status": status,
-        "date_found": date_found,
-        "priority": priority,
-        "reasoning": reasoning,
+        "job_title": job_row.title,
+        "company": job_row.company,
+        "url": job_row.url,
+        "status": job_row.status,
+        "date_found": job_row.date_found,
+        "priority": job_row.priority,
+        "reasoning": job_row.reasoning,
     }
     for field, value in field_map.items():
         col_name = cols.get(field, "")
