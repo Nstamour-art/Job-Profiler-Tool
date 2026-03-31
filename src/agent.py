@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 from src.memory import MemoryManager
 from src.onboarding import run_onboarding
 from src.prompts import AGENT_SYSTEM_PROMPT_TEMPLATE
-from src.providers import resolve_models, get_provider
+from src.providers import resolve_models, get_provider, is_rate_error
 from src.template_agent import run_template_wizard
 from src.tools.search import create_search_tool
 from src.tools.generate import create_generate_tool
@@ -57,11 +57,15 @@ _LANGCHAIN_PREFIX: dict[str, str] = {
 }
 
 
-def _langchain_model_string(provider_name: str, config: dict) -> tuple[str, str]:
-    """Return the LangChain model provider and model name."""
+def _langchain_model_string(
+    provider_name: str, config: dict, model_name: str | None = None
+) -> tuple[str, str]:
+    """Return the LangChain model provider prefix and model name."""
     prefix = _LANGCHAIN_PREFIX.get(provider_name, "ollama")
-    models, _ = resolve_models(provider_name, config["llm"])
-    return prefix, models[0]
+    if model_name is None:
+        models, _ = resolve_models(provider_name, config["llm"])
+        model_name = models[0]
+    return prefix, model_name
 
 
 def _init_tools(
@@ -87,9 +91,15 @@ def _init_tools(
     ]
 
 
-def build_agent(config: dict, resume: dict, provider_name: str, recalled_memories: str):
+def build_agent(
+    config: dict,
+    resume: dict,
+    provider_name: str,
+    recalled_memories: str,
+    model_name: str | None = None,
+):
     """Construct and return the compiled Deep Agents orchestrator graph."""
-    prefix, model_name = _langchain_model_string(provider_name, config)
+    prefix, model_name = _langchain_model_string(provider_name, config, model_name)
     agent_model = init_chat_model(model=model_name, model_provider=prefix)
 
     tools = _init_tools(agent_model, config, resume, provider_name)
@@ -127,7 +137,9 @@ def run_agent_chat(config: dict, provider_name: str) -> None:
     memory.start()
 
     recalled = _recall_memories(memory)
-    agent = build_agent(config, resume, provider_name, recalled)
+    models, _ = resolve_models(provider_name, config["llm"])
+    model_idx = 0
+    agent = build_agent(config, resume, provider_name, recalled, models[0])
     thread_config = {"thread_id": str(uuid.uuid4())}
 
     print("\nJob Search Agent ready. Type 'exit' to quit.\n")
@@ -151,29 +163,61 @@ def run_agent_chat(config: dict, provider_name: str) -> None:
             history.append({"role": "user", "content": user_input})
             print("Job Agent: ", end="", flush=True)
 
-            try:
-                result = agent.invoke(
-                    {"messages": history},
-                    config=RunnableConfig(configurable=thread_config)
-                )
-                last_msg = result["messages"][-1]
-                response_text = _extract_response(last_msg)
-                history = result["messages"]
-                memory.retain(
-                    f"User said: {user_input}\nJob Agent responded: {response_text[:300]}",
-                    context="conversation",
-                )
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                print(f"Error: {e}")
+            while model_idx < len(models):
+                try:
+                    result = agent.invoke(
+                        {"messages": history},
+                        config=RunnableConfig(configurable=thread_config)
+                    )
+                    last_msg = result["messages"][-1]
+                    response_text = _extract_response(last_msg)
+                    print(response_text)
+                    history = result["messages"]
+                    memory.retain(
+                        f"User said: {user_input}\nJob Agent responded: {response_text[:300]}",
+                        context="conversation",
+                    )
+                    break
+                except Exception as e:  # pylint: disable=broad-exception-caught
+                    if is_rate_error(e) and model_idx + 1 < len(models):
+                        model_idx += 1
+                        print(
+                            f"\n  [{models[model_idx - 1]} overloaded]"
+                            f" Switching to {models[model_idx]}..."
+                        )
+                        agent = build_agent(
+                            config, resume, provider_name, recalled, models[model_idx]
+                        )
+                    else:
+                        print(f"Error: {e}")
+                        break
     finally:
         memory.stop()
+        import asyncio  # pylint: disable=import-outside-toplevel
+        try:
+            loop = asyncio.get_event_loop()
+            if not loop.is_closed():
+                loop.run_until_complete(asyncio.sleep(0))
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
 
 
 def _extract_response(message) -> str:
-    """Helper to extract text from a LangChain message object."""
-    if isinstance(message.content, list) and len(message.content) > 0:
-        if "text" in message.content[0]:
-            return message.content[0]["text"]
-    elif isinstance(message.content, str):
-        return str(message.content)
+    """Extract text from a LangChain message, handling all provider content formats.
+
+    Anthropic returns a list of typed blocks: [{"type": "text", "text": "..."}].
+    Gemini/Ollama typically return a plain string. Both forms are handled here.
+    """
+    if isinstance(message.content, str):
+        return message.content
+    if isinstance(message.content, list):
+        parts = []
+        for block in message.content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block["text"])
+            elif isinstance(block, str):
+                parts.append(block)
+            elif not isinstance(block, dict) and hasattr(block, "text"):
+                parts.append(getattr(block, "text"))
+        return "\n".join(parts)
     return ""

@@ -179,10 +179,14 @@ _RATE_ERROR_SIGNALS = {
 }
 
 
-def _is_rate_error(exc: Exception) -> bool:
+def is_rate_error(exc: Exception) -> bool:
     """Return True if the exception looks like a rate-limit or capacity error."""
     msg = str(exc).lower()
     return any(signal in msg for signal in _RATE_ERROR_SIGNALS)
+
+
+# Private alias kept for callers in llm.py
+_is_rate_error = is_rate_error
 
 
 def get_provider(name: str, llm_cfg: dict) -> BaseProvider:

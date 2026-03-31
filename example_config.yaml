@@ -39,9 +39,9 @@ llm:
     parser_fallback_models: []
 
   anthropic:                               # --provider anthropic  (requires ANTHROPIC_API_KEY)
-    model: "claude-opus-4-6"
+    model: "claude-sonnet-4-6"
     fallback_models:
-      - "claude-sonnet-4-6"
+      - "claude-opus-4.6"
       - "claude-haiku-4-5-20251001"
     parser_model: "claude-haiku-4-5-20251001"
     parser_fallback_models: []
