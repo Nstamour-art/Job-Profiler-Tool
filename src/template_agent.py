@@ -153,7 +153,7 @@ def run_template_wizard(config: dict, provider_name: str) -> ThemeConfig:
                 original_raw = combined
             except Exception as exc:
                 print(f"  Re-extraction failed ({exc}). Keeping previous result.\n")
-            continue
+            continue  # skip the "invalid input" print below; loop back to prompt
         print("  Please type 'yes', 'edit', or 'skip'.")
 
     # Write template.yaml — store only the overrides that differ from base preset
