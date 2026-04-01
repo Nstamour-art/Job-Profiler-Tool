@@ -21,7 +21,7 @@ from src.debug import log_scraped, log_job_details, log_resume, log_cover_letter
 from src.themes import ThemeConfig, CLASSIC, PRESETS, merge_overrides, TemplateOverrides
 
 if TYPE_CHECKING:
-    from src.models import JobDetails, ResumeJSON, JobOptions, PipelineContext, PipelineResults, ProviderSuite
+    from src.models import ResumeJSON, JobDetails, JobOptions, PipelineContext, PipelineResults, ProviderSuite
     from src.providers import BaseProvider
 
 

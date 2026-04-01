@@ -10,7 +10,6 @@ import urllib.error
 from pathlib import Path
 
 import yaml
-from pydantic import ValidationError
 
 from src import ui
 
