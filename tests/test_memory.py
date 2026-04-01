@@ -1,54 +1,78 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
+
+from src.memory import MAX_RECALL_ENTRIES
 
 
-def test_memory_manager_retain_and_recall(sample_config, sample_resume):
-    mock_client = MagicMock()
-    mock_client.recall.return_value = "User prefers remote roles above $130k."
-
-    with patch("src.memory.Hindsight", return_value=mock_client), \
-         patch.dict("os.environ", {"HINDSIGHT_BASE_URL": "http://localhost:8888"}):
+def test_retain_and_recall_roundtrip(tmp_path, sample_config, sample_resume):
+    """Facts retained in a session are returned by recall() in the same session."""
+    with patch("src.memory._MEMORY_DIR", tmp_path), \
+         patch("src.memory._KEY_FILE", tmp_path / ".key"):
         from src.memory import MemoryManager
         mgr = MemoryManager(config=sample_config, resume=sample_resume, provider_name="anthropic")
         mgr.start()
         mgr.retain("User prefers remote roles above $130k.", context="preferences")
-        result = mgr.recall("What are the user's job preferences?")
+        result = mgr.recall()
         mgr.stop()
 
-    mock_client.retain.assert_called_once_with(
-        bank_id="Jane Doe",
-        content="User prefers remote roles above $130k.",
-        context="preferences",
-    )
-    assert result == "User prefers remote roles above $130k."
+    assert "User prefers remote roles above $130k." in result
 
 
-def test_memory_manager_uses_resume_name_as_bank_id(sample_config, sample_resume):
-    mock_client = MagicMock()
+def test_memory_persists_across_instances(tmp_path, sample_config, sample_resume):
+    """Facts written by one MemoryManager are readable by a second instance."""
+    with patch("src.memory._MEMORY_DIR", tmp_path), \
+         patch("src.memory._KEY_FILE", tmp_path / ".key"):
+        from src.memory import MemoryManager
 
-    with patch("src.memory.Hindsight", return_value=mock_client), \
-         patch.dict("os.environ", {"HINDSIGHT_BASE_URL": "http://localhost:8888"}):
+        mgr1 = MemoryManager(config=sample_config, resume=sample_resume, provider_name="anthropic")
+        mgr1.start()
+        mgr1.retain("User wants ML engineer roles.", context="preferences")
+        mgr1.stop()
+
+        mgr2 = MemoryManager(config=sample_config, resume=sample_resume, provider_name="anthropic")
+        mgr2.start()
+        result = mgr2.recall()
+        mgr2.stop()
+
+    assert "User wants ML engineer roles." in result
+
+
+def test_memory_is_silent_when_key_creation_fails(sample_config, sample_resume):
+    """If the key file cannot be created, MemoryManager silently no-ops."""
+    with patch("src.memory._get_or_create_key", return_value=None):
         from src.memory import MemoryManager
         mgr = MemoryManager(config=sample_config, resume=sample_resume, provider_name="anthropic")
         mgr.start()
-        mgr.retain("some fact")
-        mgr.stop()
-
-    call_kwargs = mock_client.retain.call_args[1]
-    assert call_kwargs["bank_id"] == "Jane Doe"
-
-
-def test_memory_manager_is_silent_when_no_url(sample_config, sample_resume):
-    """If HINDSIGHT_BASE_URL is not set, MemoryManager does nothing silently."""
-    with patch.dict("os.environ", {}, clear=True):
-        # Remove the key entirely if present
-        import os
-        os.environ.pop("HINDSIGHT_BASE_URL", None)
-
-        from src.memory import MemoryManager
-        mgr = MemoryManager(config=sample_config, resume=sample_resume, provider_name="anthropic")
-        mgr.start()
-        result = mgr.recall("anything")
         mgr.retain("anything")
+        result = mgr.recall()
         mgr.stop()
 
-    assert result == ""  # empty string when memory is unavailable
+    assert result == ""
+
+
+def test_recall_returns_last_n_entries(tmp_path, sample_config, sample_resume):
+    """recall() returns at most MAX_RECALL_ENTRIES entries."""
+    with patch("src.memory._MEMORY_DIR", tmp_path), \
+         patch("src.memory._KEY_FILE", tmp_path / ".key"):
+        from src.memory import MemoryManager
+        mgr = MemoryManager(config=sample_config, resume=sample_resume, provider_name="anthropic")
+        mgr.start()
+        for i in range(MAX_RECALL_ENTRIES + 5):
+            mgr.retain(f"fact {i}")
+        result = mgr.recall()
+        mgr.stop()
+
+    # Count entries by exact line match to avoid false positives from embedded newlines
+    result_lines = result.split("\n")
+    entry_count = sum(
+        1 for i in range(MAX_RECALL_ENTRIES + 5)
+        if f"fact {i}" in result_lines
+    )
+    assert entry_count <= MAX_RECALL_ENTRIES
+
+
+def test_memory_uses_resume_name_as_bank_id(sample_config, sample_resume):
+    """Bank ID defaults to resume basics.name when memory_bank config is empty."""
+    from src.memory import MemoryManager
+    mgr = MemoryManager(config=sample_config, resume=sample_resume, provider_name="anthropic")
+    assert mgr._bank_id == "Jane Doe"  # noqa: SLF001
+
