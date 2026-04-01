@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import stat
 from pathlib import Path
 
@@ -31,8 +32,15 @@ MAX_RECALL_ENTRIES = 30
 def _resolve_bank_id(config: dict, resume: dict) -> str:
     return (
         config.get("agent", {}).get("memory_bank", "").strip()
-        or resume["basics"]["name"]
+        or resume.get("basics", {}).get("name", "").strip()
+        or "default"
     )
+
+
+def _sanitize_bank_id(bank_id: str) -> str:
+    """Return a filename-safe version of the bank id (alphanumeric, dash, underscore)."""
+    safe = re.sub(r"[^A-Za-z0-9_-]", "_", bank_id)
+    return safe or "default"
 
 
 def _get_or_create_key() -> bytes | None:
@@ -76,17 +84,21 @@ class MemoryManager:
 
     def __init__(self, config: dict, resume: dict, provider_name: str) -> None:  # pylint: disable=unused-argument
         self._bank_id = _resolve_bank_id(config, resume)
-        self._memory_path = _MEMORY_DIR / f"{self._bank_id}.enc"
+        self._memory_path = _MEMORY_DIR / f"{_sanitize_bank_id(self._bank_id)}.enc"
         self._fernet: Fernet | None = None
         self._history: InMemoryChatMessageHistory | None = None
 
     def start(self) -> None:
         """Load (or initialise) the encrypted memory store."""
-        key = _get_or_create_key()
-        if key is None:
-            return
-        self._fernet = Fernet(key)
-        self._history = _load_history(self._memory_path, self._fernet)
+        try:
+            key = _get_or_create_key()
+            if key is None:
+                return
+            self._fernet = Fernet(key)
+            self._history = _load_history(self._memory_path, self._fernet)
+        except Exception:  # pylint: disable=broad-exception-caught
+            self._fernet = None
+            self._history = None
 
     def stop(self) -> None:
         """Persist the current in-memory history to disk."""

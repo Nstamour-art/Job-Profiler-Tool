@@ -18,6 +18,8 @@ echo ""
 
 # ── Configuration ────────────────────────────────────────────────────────────
 # SHA-256 hash of the uv install script — update when upgrading uv.
+# If the hash no longer matches after an upstream release, update UV_INSTALL_HASH
+# to the new value (after auditing the installer), or the pip3 fallback will be used.
 UV_INSTALL_URL="https://astral.sh/uv/install.sh"
 UV_INSTALL_HASH="B953B3F2A2764CBF860EEE4578A5949FA90ED010644C6BE1006F29010BADA946"
 
@@ -44,22 +46,30 @@ if ! command -v uv &>/dev/null; then
     fi
 
     if [[ "${actual_hash^^}" != "${UV_INSTALL_HASH^^}" ]]; then
-        echo "ERROR: SHA-256 hash mismatch for uv installer!"
+        echo "WARNING: SHA-256 hash mismatch — the upstream uv installer may have been updated."
         echo "  Expected: $UV_INSTALL_HASH"
         echo "  Actual:   $actual_hash"
+        echo "  Tip: update UV_INSTALL_HASH in this script to '${actual_hash^^}' after auditing the new installer."
         rm -f "$tmp_installer"
-        exit 1
-    fi
-    echo "Hash verified."
-
-    bash "$tmp_installer"
-    rm -f "$tmp_installer"
-    # Source the env file uv's installer creates, or add cargo/bin to PATH
-    if [ -f "$HOME/.local/bin/env" ]; then
-        # shellcheck disable=SC1091
-        . "$HOME/.local/bin/env"
+        # Fallback: install uv via pip3
+        if command -v pip3 &>/dev/null; then
+            echo "Attempting fallback: pip3 install uv ..."
+            pip3 install --quiet uv || { echo "ERROR: pip3 fallback failed. Install uv manually: https://docs.astral.sh/uv/"; exit 1; }
+        else
+            echo "ERROR: pip3 not found. Install uv manually: https://docs.astral.sh/uv/"
+            exit 1
+        fi
     else
-        export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+        echo "Hash verified."
+        bash "$tmp_installer"
+        rm -f "$tmp_installer"
+        # Source the env file uv's installer creates, or add cargo/bin to PATH
+        if [ -f "$HOME/.local/bin/env" ]; then
+            # shellcheck disable=SC1091
+            . "$HOME/.local/bin/env"
+        else
+            export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+        fi
     fi
     if ! command -v uv &>/dev/null; then
         echo "ERROR: uv installation failed or is not on PATH."

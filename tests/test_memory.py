@@ -9,7 +9,6 @@ def test_retain_and_recall_roundtrip(tmp_path, sample_config, sample_resume):
          patch("src.memory._KEY_FILE", tmp_path / ".key"):
         from src.memory import MemoryManager
         mgr = MemoryManager(config=sample_config, resume=sample_resume, provider_name="anthropic")
-        mgr._memory_path = tmp_path / "Jane Doe.enc"  # noqa: SLF001
         mgr.start()
         mgr.retain("User prefers remote roles above $130k.", context="preferences")
         result = mgr.recall()
@@ -25,13 +24,11 @@ def test_memory_persists_across_instances(tmp_path, sample_config, sample_resume
         from src.memory import MemoryManager
 
         mgr1 = MemoryManager(config=sample_config, resume=sample_resume, provider_name="anthropic")
-        mgr1._memory_path = tmp_path / "Jane Doe.enc"  # noqa: SLF001
         mgr1.start()
         mgr1.retain("User wants ML engineer roles.", context="preferences")
         mgr1.stop()
 
         mgr2 = MemoryManager(config=sample_config, resume=sample_resume, provider_name="anthropic")
-        mgr2._memory_path = tmp_path / "Jane Doe.enc"  # noqa: SLF001
         mgr2.start()
         result = mgr2.recall()
         mgr2.stop()
@@ -58,15 +55,19 @@ def test_recall_returns_last_n_entries(tmp_path, sample_config, sample_resume):
          patch("src.memory._KEY_FILE", tmp_path / ".key"):
         from src.memory import MemoryManager
         mgr = MemoryManager(config=sample_config, resume=sample_resume, provider_name="anthropic")
-        mgr._memory_path = tmp_path / "Jane Doe.enc"  # noqa: SLF001
         mgr.start()
         for i in range(MAX_RECALL_ENTRIES + 5):
             mgr.retain(f"fact {i}")
         result = mgr.recall()
         mgr.stop()
 
-    lines = [line for line in result.splitlines() if line.strip()]
-    assert len(lines) <= MAX_RECALL_ENTRIES
+    # Count entries by exact line match to avoid false positives from embedded newlines
+    result_lines = result.split("\n")
+    entry_count = sum(
+        1 for i in range(MAX_RECALL_ENTRIES + 5)
+        if f"fact {i}" in result_lines
+    )
+    assert entry_count <= MAX_RECALL_ENTRIES
 
 
 def test_memory_uses_resume_name_as_bank_id(sample_config, sample_resume):

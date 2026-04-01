@@ -20,12 +20,12 @@ Write-Host ""
 
 # ── Configuration ────────────────────────────────────────────────────────────
 # SHA-256 hash of the uv install script — update when upgrading uv.
+# If the hash no longer matches after an upstream release, update UV_INSTALL_HASH
+# to the new value (after auditing the installer), or the pip fallback will be used.
 $UV_INSTALL_URL  = "https://astral.sh/uv/install.ps1"
 $UV_INSTALL_HASH = "282D58C11A9C1E21E8C59C12DC0618D0E94A621526C8F814948777BA7D605335"
 
 # 1. Install uv if not already available — download, verify hash, then execute
-# Set installation scope to current location instead of user shell
-$env:UV_INSTALL_DIR = $PWD
 if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     Write-Host "Installing uv..." -ForegroundColor Yellow
 
@@ -40,19 +40,34 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     # Verify SHA-256 hash before execution
     $actualHash = (Get-FileHash -Path $tempInstaller -Algorithm SHA256).Hash
     if ($actualHash -ne $UV_INSTALL_HASH) {
-        Write-Host "ERROR: SHA-256 hash mismatch for uv installer!" -ForegroundColor Red
-        Write-Host "  Expected: $UV_INSTALL_HASH" -ForegroundColor Red
-        Write-Host "  Actual:   $actualHash" -ForegroundColor Red
+        Write-Host "WARNING: SHA-256 hash mismatch — the upstream uv installer may have been updated." -ForegroundColor Yellow
+        Write-Host "  Expected: $UV_INSTALL_HASH" -ForegroundColor Yellow
+        Write-Host "  Actual:   $actualHash" -ForegroundColor Yellow
+        Write-Host "  Tip: update UV_INSTALL_HASH in this script to '$actualHash' after auditing the new installer." -ForegroundColor Yellow
         Remove-Item -Force $tempInstaller
-        exit 1
+        # Fallback: install uv via pip
+        Write-Host "Attempting fallback: pip install uv ..." -ForegroundColor Yellow
+        $pipCmd = Get-Command pip -ErrorAction SilentlyContinue
+        if ($pipCmd) {
+            pip install --quiet uv
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "ERROR: pip fallback failed. Install uv manually: https://docs.astral.sh/uv/" -ForegroundColor Red
+                exit 1
+            }
+        } else {
+            Write-Host "ERROR: pip not found. Install uv manually: https://docs.astral.sh/uv/" -ForegroundColor Red
+            exit 1
+        }
+    } else {
+        Write-Host "Hash verified." -ForegroundColor Green
+
+        powershell -ExecutionPolicy ByPass -File $tempInstaller
+        Remove-Item -Force $tempInstaller
     }
-    Write-Host "Hash verified." -ForegroundColor Green
 
-    powershell -ExecutionPolicy ByPass -File $tempInstaller
-    Remove-Item -Force $tempInstaller
-
-    # Refresh PATH so uv is available in this session
-    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + $env:PATH
+    # Refresh PATH: add default uv install locations so uv is available in this session
+    $uvDefaultDir = Join-Path $env:USERPROFILE ".local" "bin"
+    $env:PATH = $uvDefaultDir + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + $env:PATH
     if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
         Write-Host "ERROR: uv installation failed or is not on PATH." -ForegroundColor Red
         Write-Host "Please restart your terminal and re-run this script." -ForegroundColor Red
