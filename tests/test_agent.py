@@ -1,6 +1,18 @@
 from unittest.mock import MagicMock, patch
 
 
+def test_recall_memories_calls_recall_exactly_once():
+    """_recall_memories must call memory.recall() only once to avoid duplicating history."""
+    mock_memory = MagicMock()
+    mock_memory.recall.return_value = "User prefers remote Python roles."
+
+    from src.agent import _recall_memories
+    result = _recall_memories(mock_memory)
+
+    mock_memory.recall.assert_called_once()
+    assert result == "User prefers remote Python roles."
+
+
 def test_build_agent_returns_compiled_graph(sample_config, sample_resume):
     """build_agent returns a compiled graph without making any API calls."""
     fake_graph = MagicMock()
