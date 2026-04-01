@@ -221,21 +221,21 @@ llm:
     parser_fallback_models: []
 
   anthropic:
-    model: "claude-opus-4-6"
+    model: "claude-sonnet-4-6"
     fallback_models:
-      - "claude-sonnet-4-6"
+      - "claude-opus-4-6" 
       - "claude-haiku-4-5-20251001"
     parser_model: "claude-haiku-4-5-20251001"
     parser_fallback_models: []
 
   gemini:
-    model: "gemini-2.5-pro-preview-03-25"
+    model: "gemini-2.5-pro"
     fallback_models:
-      - "gemini-2.0-flash"
-      - "gemini-2.0-flash-lite"
-    parser_model: "gemini-2.0-flash"
+      - "gemini-3.0-flash"
+      - "gemini-3.0-flash-lite"
+    parser_model: "gemini-3.0-flash"
     parser_fallback_models:
-      - "gemini-2.0-flash-lite"
+      - "gemini-3.0-flash-lite"
 
 agent:
   max_jobs: 10        # max job listings surfaced per search session

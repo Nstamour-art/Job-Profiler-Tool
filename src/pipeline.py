@@ -21,7 +21,7 @@ from src.debug import log_scraped, log_job_details, log_resume, log_cover_letter
 from src.themes import ThemeConfig, CLASSIC, PRESETS, merge_overrides, TemplateOverrides
 
 if TYPE_CHECKING:
-    from src.models import ResumeJSON, JobOptions, PipelineContext, PipelineResults, ProviderSuite
+    from src.models import JobDetails, ResumeJSON, JobOptions, PipelineContext, PipelineResults, ProviderSuite
     from src.providers import BaseProvider
 
 
@@ -86,7 +86,7 @@ def _get_job_data(job: dict, url: str) -> dict:
 
 def _generate_llm_content(
     ctx: "PipelineContext",
-    job_details: dict,
+    job_details: "JobDetails",
 ) -> "PipelineResults":
     """Call LLM to generate resume and cover letter content."""
     from src.models import PipelineResults  # pylint: disable=import-outside-toplevel
@@ -126,7 +126,7 @@ def _save_documents(
 
     if not ctx.options.cover_only and results.resume_json is not None:
         resume_path = str(_unique_path(folder / f"{candidate_name} - {safe_name} - Resume.docx"))
-        click.echo("  Building resume.docx …")
+        ui.print_step("Building resume.docx \u2026")
         build_resume(
             resume_json=results.resume_json,
             personal=ctx.resume["basics"],
@@ -139,7 +139,7 @@ def _save_documents(
         cover_path = str(
             _unique_path(folder / f"{candidate_name} - {safe_name} - Cover Letter.docx")
         )
-        click.echo("  Building cover_letter.docx …")
+        ui.print_step("Building cover_letter.docx \u2026")
         build_cover_letter(
             cover_json=results.cover_json,
             personal=ctx.resume["basics"],
@@ -153,7 +153,7 @@ def _save_documents(
 def _create_output_folder(
     config: dict,
     job: dict,
-    job_details: dict,
+    job_details: "JobDetails",
 ) -> tuple[Path, ThemeConfig, str, str]:
     """Create and return the output folder, theme, company, and title."""
     template_path = config.get("paths", {}).get("template_yaml", "template.yaml")

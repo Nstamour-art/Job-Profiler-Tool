@@ -12,6 +12,8 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
+from src import ui
+
 # Maps provider name → environment variable name for its API key.
 _API_KEY_VARS: dict[str, str] = {
     "openai": "OPENAI_API_KEY",
@@ -65,10 +67,10 @@ def _prompt_for_api_key(provider_name: str, key_var: str, env_path: str = ".env"
     """Prompt for an API key, write it to .env, and reload dotenv in the current process."""
     from dotenv import load_dotenv  # pylint: disable=import-outside-toplevel
     url = _API_KEY_URLS.get(provider_name, "")
-    print(f"\n  Get your {provider_name.capitalize()} API key at: {url}")
+    ui.print_hint(f"Get your {provider_name.capitalize()} API key at: {url}")
     key = getpass.getpass(f"  Enter {provider_name.capitalize()} API key: ").strip()
     while not key:
-        print("  API key cannot be empty.")
+        ui.print_error("API key cannot be empty.")
         key = getpass.getpass(f"  Enter {provider_name.capitalize()} API key: ").strip()
     _append_env(key_var, key, env_path)
     load_dotenv(override=True)
@@ -84,9 +86,9 @@ def ensure_provider_ready(
     """
     if provider_name == "local":
         if not _ollama_reachable():
-            print("\n  Ollama doesn't appear to be running.")
-            print("  Install it from https://ollama.com, then run this tool again.")
-            print("  Or pass --provider <name> to use a cloud provider.\n")
+            ui.print_error("Ollama doesn't appear to be running.")
+            ui.print_hint("Install it from https://ollama.com, then run this tool again.")
+            ui.print_hint("Or pass --provider <name> to use a cloud provider.")
             raise SystemExit(1)
     else:
         key_var = _API_KEY_VARS.get(provider_name)
@@ -95,7 +97,7 @@ def ensure_provider_ready(
                 f"Unknown provider: {provider_name!r}. Choose from: {list(_PROVIDER_NAMES)}"
             )
         if not os.environ.get(key_var, "").strip():
-            print(f"\n  {provider_name.capitalize()} API key not found.")
+            ui.print_warning(f"{provider_name.capitalize()} API key not found.")
             _prompt_for_api_key(provider_name, key_var, env_path)
 
 
@@ -155,8 +157,8 @@ def run_setup_wizard(
     config_path: str = "config.yaml", env_path: str = ".env"
 ) -> dict:
     """Run the interactive first-run setup wizard. Returns the completed config dict."""
-    print("\nWelcome to Job Profiler Tool!")
-    print("Let's get you set up. This will only take a couple of minutes.\n")
+    ui.print_welcome("Welcome to Job Profiler Tool!",
+                      "Let's get you set up. This will only take a couple of minutes.")
 
     # --- Provider selection + provider-specific setup ---
     while True:
@@ -165,14 +167,14 @@ def run_setup_wizard(
             if choice in ("1", "2", "3", "4", "5"):
                 provider = _PROVIDER_NAMES[int(choice) - 1]
                 break
-            print("  Please enter a number from 1 to 5.")
+            ui.print_error("Please enter a number from 1 to 5.")
 
         if provider == "local":
             if _ollama_reachable():
-                print("\n  Ollama is running.\n")
+                ui.print_success("Ollama is running.")
                 break
-            print("\n  Ollama doesn't appear to be running.")
-            print("  Install it from https://ollama.com, then re-run this tool.")
+            ui.print_error("Ollama doesn't appear to be running.")
+            ui.print_hint("Install it from https://ollama.com, then re-run this tool.")
             input("\n  Press Enter to choose a different provider, or Ctrl+C to exit.\n> ")
             # Loop back to provider selection
             continue
@@ -222,5 +224,5 @@ def run_setup_wizard(
     with open(config_path, "w", encoding="utf-8") as f:
         yaml.dump(config, f, allow_unicode=True, default_flow_style=False)
 
-    print(f"\n  config.yaml created. Provider: {provider.capitalize()}\n")
+    ui.print_success(f"config.yaml created. Provider: {provider.capitalize()}")
     return config
