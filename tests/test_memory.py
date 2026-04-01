@@ -52,6 +52,22 @@ def test_memory_is_silent_when_key_creation_fails(sample_config, sample_resume):
     assert result == ""
 
 
+def test_memory_is_silent_when_fernet_raises(sample_config, sample_resume):
+    """If Fernet(key) raises (e.g. corrupted key bytes), start() silently no-ops."""
+    corrupted_key = b"not-a-valid-fernet-key"
+    with patch("src.memory._get_or_create_key", return_value=corrupted_key):
+        from src.memory import MemoryManager
+        mgr = MemoryManager(config=sample_config, resume=sample_resume, provider_name="anthropic")
+        mgr.start()  # must not raise
+        assert mgr._fernet is None  # noqa: SLF001
+        assert mgr._history is None  # noqa: SLF001
+        mgr.retain("anything")
+        result = mgr.recall()
+        mgr.stop()
+
+    assert result == ""
+
+
 def test_recall_returns_last_n_entries(tmp_path, sample_config, sample_resume):
     """recall() returns at most MAX_RECALL_ENTRIES entries."""
     with patch("src.memory._MEMORY_DIR", tmp_path), \

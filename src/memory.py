@@ -82,11 +82,15 @@ class MemoryManager:
 
     def start(self) -> None:
         """Load (or initialise) the encrypted memory store."""
-        key = _get_or_create_key()
-        if key is None:
-            return
-        self._fernet = Fernet(key)
-        self._history = _load_history(self._memory_path, self._fernet)
+        try:
+            key = _get_or_create_key()
+            if key is None:
+                return
+            self._fernet = Fernet(key)
+            self._history = _load_history(self._memory_path, self._fernet)
+        except Exception:  # pylint: disable=broad-exception-caught
+            self._fernet = None
+            self._history = None
 
     def stop(self) -> None:
         """Persist the current in-memory history to disk."""
