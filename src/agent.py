@@ -1,8 +1,8 @@
 """
 Main job search agent — orchestrator entry point.
 
-Initialises Hindsight memory, builds the Deep Agents orchestrator with all
-tools, and runs the interactive chat loop.
+Initialises persistent encrypted memory, builds the Deep Agents orchestrator
+with all tools, and runs the interactive chat loop.
 """
 
 from __future__ import annotations

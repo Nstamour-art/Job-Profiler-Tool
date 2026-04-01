@@ -4,11 +4,56 @@
 set -euo pipefail
 
 echo "=== Job-Profiler-Tool Setup ==="
+echo ""
+echo "This script will:"
+echo "  1. Install uv (Python package manager) if not already present"
+echo "  2. Sync project dependencies via uv"
+echo ""
+read -rp "Do you want to proceed? [Y/n] " confirm
+if [[ -n "$confirm" && ! "$confirm" =~ ^[Yy]([Ee][Ss])?$ ]]; then
+    echo "Aborted."
+    exit 0
+fi
+echo ""
 
-# 1. Install uv if not already available
+# ── Configuration ────────────────────────────────────────────────────────────
+# SHA-256 hash of the uv install script — update when upgrading uv.
+UV_INSTALL_URL="https://astral.sh/uv/install.sh"
+UV_INSTALL_HASH="B953B3F2A2764CBF860EEE4578A5949FA90ED010644C6BE1006F29010BADA946"
+
+# 1. Install uv if not already available — download, verify hash, then execute
 if ! command -v uv &>/dev/null; then
     echo "Installing uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    tmp_installer="$(mktemp)"
+    curl -LsSf "$UV_INSTALL_URL" -o "$tmp_installer" || {
+        echo "ERROR: Failed to download uv installer."
+        rm -f "$tmp_installer"
+        exit 1
+    }
+
+    # Verify SHA-256 hash before execution
+    if command -v sha256sum &>/dev/null; then
+        actual_hash=$(sha256sum "$tmp_installer" | awk '{print $1}')
+    elif command -v shasum &>/dev/null; then
+        actual_hash=$(shasum -a 256 "$tmp_installer" | awk '{print $1}')
+    else
+        echo "ERROR: No sha256sum or shasum found — cannot verify installer."
+        rm -f "$tmp_installer"
+        exit 1
+    fi
+
+    if [[ "${actual_hash^^}" != "${UV_INSTALL_HASH^^}" ]]; then
+        echo "ERROR: SHA-256 hash mismatch for uv installer!"
+        echo "  Expected: $UV_INSTALL_HASH"
+        echo "  Actual:   $actual_hash"
+        rm -f "$tmp_installer"
+        exit 1
+    fi
+    echo "Hash verified."
+
+    bash "$tmp_installer"
+    rm -f "$tmp_installer"
     # Source the env file uv's installer creates, or add cargo/bin to PATH
     if [ -f "$HOME/.local/bin/env" ]; then
         # shellcheck disable=SC1091
@@ -26,17 +71,13 @@ else
 fi
 
 # 2. Sync project (creates .venv and installs dependencies)
-#    --inexact: don't remove packages uv didn't install (avoids RECORD conflicts with pip)
 echo "Running uv sync..."
-uv sync --inexact
+uv sync
 echo "uv sync succeeded."
-
-# 3. Install hindsight via uv run pip (uv pip fails on legacy use_2to3 builds)
-echo "Installing hindsight>=0.1.7..."
-uv run pip install "hindsight>=0.1.7"
-echo "hindsight installed."
 
 echo ""
 echo "=== Setup complete! ==="
 echo "Activate the virtual environment with:"
 echo "  source .venv/bin/activate"
+echo "Then run the tool with:"
+echo "  uv run main.py run"
