@@ -70,13 +70,10 @@ def list_jobs(config_path):
         raise click.ClickException(f"Could not read Google Sheet: {e}")
 
     if not jobs:
-        click.echo("No jobs found in the sheet.")
+        ui.print_info("No jobs found in the sheet.")
         return
 
-    click.echo(f"\n{'Row':<5} {'Status':<12} {'Job Title':<30} {'URL'}")
-    click.echo("-" * 80)
-    for j in jobs:
-        click.echo(f"{j['row']:<5} {j['status']:<12} {j['job_title'][:28]:<30} {j['url'][:50]}")
+    ui.print_job_table(jobs)
 
 
 @cli.command("template")
@@ -129,7 +126,7 @@ def _run_first_time_setup(config_path: str, provider_name: str | None) -> None:
     if not click.confirm(
         "\nSetup complete! Ready to start the job search agent?", default=False
     ):
-        click.echo("\nRun 'uv run python main.py run' when you're ready.\n")
+        ui.print_hint("Run 'uv run python main.py run' when you're ready.")
         return
 
     run_agent_chat(config=config, provider_name=resolved_provider)
@@ -169,7 +166,7 @@ def _run_direct_url_mode(
     from src.debug import init_db  # pylint: disable=import-outside-toplevel
     from src.pipeline import process_job  # pylint: disable=import-outside-toplevel
 
-    click.echo(
+    ui.print_info(
         f"Provider: {ps.name}  |  model: {ps.models[0]}  |  parser: {ps.parser_models[0]}"
     )
 

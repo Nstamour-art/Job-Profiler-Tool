@@ -46,11 +46,15 @@ class MemoryManager:
         if not base_url:
             return
         try:
-            self._client = Hindsight(base_url=base_url)
-            self._available = True
+            if not base_url.startswith("http://") and not base_url.startswith("https://"):
+                base_url = "http://" + base_url
+            if _CLIENT_AVAILABLE:
+                self._client = Hindsight(base_url=base_url) # pyright: ignore
+                self._available = True
         except Exception as exc:  # pylint: disable=broad-exception-caught
-            print(
-                f"  [memory] Could not connect to Hindsight ({exc})"
+            from src import ui  # pylint: disable=import-outside-toplevel
+            ui.print_warning(
+                f"Could not connect to Hindsight ({exc})"
                 " — running without persistent memory."
             )
 

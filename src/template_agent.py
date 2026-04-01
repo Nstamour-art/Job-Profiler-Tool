@@ -12,6 +12,7 @@ from src.themes import ThemeConfig, TemplateOverrides, PRESETS, merge_overrides
 from src.llm import _call_with_retry
 from src.prompts import TEMPLATE_EXTRACT_OVERRIDES
 from src.providers import get_provider, resolve_models
+from src import ui
 
 
 _MENU = """\
@@ -70,7 +71,7 @@ def _select_theme_interactively(template_path: str) -> str:
     try:
         with open(template_path, encoding="utf-8") as f:
             current = ThemeConfig.model_validate(yaml.safe_load(f))
-        print(f"\nCurrent template: {current.name.capitalize()}")
+        ui.print_info(f"Current template: {current.name.capitalize()}")
     except (FileNotFoundError, yaml.YAMLError, ValueError):
         pass
 
@@ -79,10 +80,10 @@ def _select_theme_interactively(template_path: str) -> str:
         if choice in ("1", "2", "3", "4"):
             name = _THEME_NAMES[int(choice) - 1]
             if name == "creative":
-                print("\n  \u26a0  Creative uses a two-column sidebar. Some older ATS systems")
-                print("     may read columns left-to-right and interleave content.\n")
+                ui.print_warning("Creative uses a two-column sidebar. Some older ATS systems")
+                ui.print_warning("may read columns left-to-right and interleave content.")
             return name
-        print("  Please enter 1, 2, 3, or 4.")
+        ui.print_error("Please enter 1, 2, 3, or 4.")
 
 
 def _apply_initial_customization(
@@ -114,7 +115,7 @@ def _apply_initial_customization(
                 customizations.append(f"accent: {overrides.accent_color}")
             return base, customizations, raw, overrides
         except Exception as exc:
-            print(f"  Could not extract customization ({exc}). Using base theme defaults.\n")
+            ui.print_warning(f"Could not extract customization ({exc}). Using base theme defaults.")
 
     return base, customizations, raw, None
 
@@ -147,7 +148,7 @@ def _handle_edit_flow(
             customs.append(f"accent: {overrides.accent_color}")
         return base, customs, combined, overrides
     except Exception as exc:  # pylint: disable=broad-exception-caught
-        print(f"  Re-extraction failed ({exc}). Keeping previous result.\n")
+        ui.print_warning(f"Re-extraction failed ({exc}). Keeping previous result.")
         return None, None, original_raw, None
 
 
@@ -164,6 +165,8 @@ def run_template_wizard(config: dict, provider_name: str) -> ThemeConfig:
     )
 
     while True:
+        if customizations is None:
+            customizations = []
         response = input(_format_confirmation(base, customizations)).strip().lower()
         if response == "yes":
             break
@@ -177,7 +180,7 @@ def run_template_wizard(config: dict, provider_name: str) -> ThemeConfig:
             if new_base:
                 base, customizations, current_overrides = new_base, new_customs, new_overrides
             continue
-        print("  Please type 'yes', 'edit', or 'skip'.")
+        ui.print_error("Please type 'yes', 'edit', or 'skip'.")
 
     # Write template.yaml — store the TemplateOverrides fields (English strings, not RGB)
     final_overrides = current_overrides.model_dump(exclude_defaults=True) if current_overrides else {}
@@ -185,5 +188,5 @@ def run_template_wizard(config: dict, provider_name: str) -> ThemeConfig:
     with open(template_path, "w", encoding="utf-8") as f:
         yaml.dump({"theme": base.name, "overrides": final_overrides}, f, allow_unicode=True)
 
-    print(f"\nTemplate saved. Using {base.name.capitalize()} for your documents.\n")
+    ui.print_success(f"Template saved. Using {base.name.capitalize()} for your documents.")
     return base

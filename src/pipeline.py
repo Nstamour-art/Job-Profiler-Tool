@@ -126,7 +126,7 @@ def _save_documents(
 
     if not ctx.options.cover_only and results.resume_json is not None:
         resume_path = str(_unique_path(folder / f"{candidate_name} - {safe_name} - Resume.docx"))
-        click.echo("  Building resume.docx …")
+        ui.print_step("Building resume.docx \u2026")
         build_resume(
             resume_json=results.resume_json,
             personal=ctx.resume["basics"],
@@ -139,7 +139,7 @@ def _save_documents(
         cover_path = str(
             _unique_path(folder / f"{candidate_name} - {safe_name} - Cover Letter.docx")
         )
-        click.echo("  Building cover_letter.docx …")
+        ui.print_step("Building cover_letter.docx \u2026")
         build_cover_letter(
             cover_json=results.cover_json,
             personal=ctx.resume["basics"],

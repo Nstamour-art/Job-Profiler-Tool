@@ -37,7 +37,7 @@ def _call_with_retry(
     - On rate/availability errors, skips immediately to the next fallback model.
     - Raises once all models and retries are exhausted.
     """
-    import click  # pylint: disable=import-outside-toplevel
+    from src import ui  # pylint: disable=import-outside-toplevel
     max_retries = llm_cfg.get("max_retries", 3)
     temperature = llm_cfg.get("temperature", 0.3)
     last_error: Exception = RuntimeError("No attempts made.")
@@ -51,17 +51,15 @@ def _call_with_retry(
             except Exception as e:  # pylint: disable=broad-exception-caught
                 last_error = e
                 if _is_rate_error(e) and i < len(models) - 1:
-                    click.echo(
-                        f"  {model} unavailable (rate/capacity), switching to {models[i + 1]} ..."
-                    )
+                    ui.print_model_switch(model, models[i + 1])
                     break  # skip to next model
                 raise RuntimeError(f"LLM provider error: {e}") from e
 
             if raw is None:
                 last_error = RuntimeError("Provider returned None")
                 if attempt < max_retries:
-                    click.echo(
-                        f"  Provider returned None (attempt {attempt}/{max_retries}), retrying ..."
+                    ui.print_warning(
+                        f"Provider returned None (attempt {attempt}/{max_retries}), retrying \u2026"
                     )
                 continue
 
@@ -70,8 +68,8 @@ def _call_with_retry(
             except Exception as e:  # pylint: disable=broad-exception-caught
                 last_error = e
                 if attempt < max_retries:
-                    click.echo(
-                        f"  JSON parse failed (attempt {attempt}/{max_retries}), retrying ..."
+                    ui.print_warning(
+                        f"JSON parse failed (attempt {attempt}/{max_retries}), retrying \u2026"
                     )
         else:
             # Exhausted retries on this model without a rate-error break — give up

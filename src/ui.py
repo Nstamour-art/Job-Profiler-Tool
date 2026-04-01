@@ -14,6 +14,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.rule import Rule
+from rich.table import Table
 from rich.text import Text
 from rich import box as rich_box
 
@@ -198,6 +199,51 @@ def onboarding_confirm_prompt() -> str:
         "\033[2m(yes / edit / skip)\033[0m "
         "\033[33m\u203a\033[0m "
     )
+
+
+# ---------------------------------------------------------------------------
+# General-purpose output helpers
+# ---------------------------------------------------------------------------
+
+def print_warning(message: str) -> None:
+    """Print a yellow warning line."""
+    console.print(f"  [yellow]\u26a0[/yellow] [dim]{message}[/dim]")
+
+
+def print_info(message: str) -> None:
+    """Print a plain informational line."""
+    console.print(f"  {message}")
+
+
+def print_hint(message: str) -> None:
+    """Print a dim instructional hint."""
+    console.print(f"  [dim]{message}[/dim]")
+
+
+def print_job_table(jobs: list[dict]) -> None:
+    """Print a rich table of jobs from the Google Sheet."""
+    table = Table(box=rich_box.SIMPLE_HEAVY, show_edge=False, pad_edge=False)
+    table.add_column("Row", style="bold", width=5)
+    table.add_column("Status", width=12)
+    table.add_column("Job Title", width=30)
+    table.add_column("URL", style="dim")
+    for j in jobs:
+        table.add_row(
+            str(j["row"]),
+            j["status"],
+            j["job_title"][:28],
+            j["url"][:50],
+        )
+    console.print()
+    console.print(table)
+
+
+def print_welcome(title: str, subtitle: str) -> None:
+    """Print a welcome header for wizards / first-run screens."""
+    console.print()
+    console.print(f"  [bold cyan]{title}[/bold cyan]")
+    console.print(f"  [dim]{subtitle}[/dim]")
+    console.print()
 
 
 def onboarding_edit_prompt() -> str:
