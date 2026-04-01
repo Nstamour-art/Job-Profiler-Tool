@@ -73,6 +73,7 @@ def _init_tools(
     config: dict,
     resume: dict,
     provider_name: str,
+    parser_model=None,
 ):
     """Initialize and return all tools for the agent."""
     tavily_api_key = os.environ.get("TAVILY_API_KEY", "")
@@ -82,7 +83,7 @@ def _init_tools(
     provider = get_provider(provider_name, config["llm"])
 
     return [
-        create_search_tool(agent_model, tavily_api_key, max_jobs),
+        create_search_tool(agent_model, tavily_api_key, max_jobs, parser_model=parser_model),
         create_generate_tool(config, resume, provider, models, parser_models),
         *create_resume_tools(config["paths"]["resume_yaml"]),
         create_sheet_log_tool(config),
@@ -102,7 +103,10 @@ def build_agent(
     prefix, model_name = _langchain_model_string(provider_name, config, model_name)
     agent_model = init_chat_model(model=model_name, model_provider=prefix)
 
-    tools = _init_tools(agent_model, config, resume, provider_name)
+    _, parser_models = resolve_models(provider_name, config["llm"])
+    parser_model = init_chat_model(model=parser_models[0], model_provider=prefix)
+
+    tools = _init_tools(agent_model, config, resume, provider_name, parser_model=parser_model)
 
     system_prompt = AGENT_SYSTEM_PROMPT_TEMPLATE.format(
         candidate_name=resume["basics"]["name"],

@@ -143,7 +143,7 @@ def _save_documents(
             cover_json=results.cover_json,
             personal=ctx.resume["basics"],
             company=company,
-            job_title=title,
+            _job_title=title,
             output_path=cover_path,
             theme=theme,
         )
