@@ -52,3 +52,38 @@ def test_memory_manager_is_silent_when_no_url(sample_config, sample_resume):
         mgr.stop()
 
     assert result == ""  # empty string when memory is unavailable
+
+
+def test_resolve_bank_id_falls_back_when_basics_missing(sample_config):
+    """_resolve_bank_id() must not raise when resume is missing 'basics'."""
+    from src.memory import _resolve_bank_id
+
+    malformed_resume = {}  # no 'basics' key
+    bank_id = _resolve_bank_id(sample_config, malformed_resume)
+    assert bank_id == "default_user"
+
+
+def test_resolve_bank_id_falls_back_when_name_missing(sample_config):
+    """_resolve_bank_id() must not raise when resume is missing 'basics.name'."""
+    from src.memory import _resolve_bank_id
+
+    malformed_resume = {"basics": {}}  # no 'name' key
+    bank_id = _resolve_bank_id(sample_config, malformed_resume)
+    assert bank_id == "default_user"
+
+
+def test_resolve_bank_id_falls_back_when_resume_is_none(sample_config):
+    """_resolve_bank_id() must not raise when resume is None."""
+    from src.memory import _resolve_bank_id
+
+    bank_id = _resolve_bank_id(sample_config, None)
+    assert bank_id == "default_user"
+
+
+def test_resolve_bank_id_prefers_config_memory_bank(sample_config, sample_resume):
+    """_resolve_bank_id() uses config memory_bank when set, over resume name."""
+    from src.memory import _resolve_bank_id
+
+    config_with_bank = {**sample_config, "agent": {**sample_config["agent"], "memory_bank": "my_bank"}}
+    bank_id = _resolve_bank_id(config_with_bank, sample_resume)
+    assert bank_id == "my_bank"

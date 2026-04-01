@@ -24,9 +24,11 @@ except ImportError:
 
 
 def _resolve_bank_id(config: dict, resume: dict) -> str:
+    name = (resume or {}).get("basics", {}).get("name", "")
     return (
         config.get("agent", {}).get("memory_bank", "").strip()
-        or resume["basics"]["name"]
+        or str(name).strip()
+        or "default_user"
     )
 
 
