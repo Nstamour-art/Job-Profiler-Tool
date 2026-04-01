@@ -20,7 +20,7 @@ from src.debug import log_scraped, log_job_details, log_resume, log_cover_letter
 from src.themes import ThemeConfig, CLASSIC, PRESETS, merge_overrides, TemplateOverrides
 
 if TYPE_CHECKING:
-    from src.models import ResumeJSON, JobOptions, PipelineContext, PipelineResults, ProviderSuite
+    from src.models import ResumeJSON, JobDetails, JobOptions, PipelineContext, PipelineResults, ProviderSuite
     from src.providers import BaseProvider
 
 
@@ -85,7 +85,7 @@ def _get_job_data(job: dict, url: str) -> dict:
 
 def _generate_llm_content(
     ctx: "PipelineContext",
-    job_details: dict,
+    job_details: "JobDetails",
 ) -> "PipelineResults":
     """Call LLM to generate resume and cover letter content."""
     from src.models import PipelineResults  # pylint: disable=import-outside-toplevel
@@ -152,7 +152,7 @@ def _save_documents(
 def _create_output_folder(
     config: dict,
     job: dict,
-    job_details: dict,
+    job_details: "JobDetails",
 ) -> tuple[Path, ThemeConfig, str, str]:
     """Create and return the output folder, theme, company, and title."""
     template_path = config.get("paths", {}).get("template_yaml", "template.yaml")
