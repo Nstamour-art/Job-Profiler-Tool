@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 import yaml
 
+from src import ui
 from src.llm import _call_with_retry
 from src.resume_models import SECTION_MODEL_MAP
 from src.prompts import ONBOARDING_SECTION_PROMPTS
@@ -103,49 +104,48 @@ def _interview_section(
     llm_cfg: dict,
 ) -> Any:
     """Run the interactive loop for one section. Returns the confirmed plain dict or list."""
-    print(f"\n{_OPENING_PROMPTS[section]}\n")
+    ui.print_section_header(section)
+    ui.print_onboarding_question(_OPENING_PROMPTS[section])
 
     while True:
-        raw = input("> ").strip()
+        raw = input(ui.onboarding_input_prompt()).strip()
         if not raw:
             continue
         if raw.lower() == "skip":
-            print(f"  Skipping {section}.\n")
+            ui.print_step(f"Skipping {section}.")
             return _empty_section(section)
 
         try:
-            extracted = extract_section(section, raw, provider_suite, llm_cfg)
+            with ui.thinking_spinner("Parsing your input\u2026"):
+                extracted = extract_section(section, raw, provider_suite, llm_cfg)
         except RuntimeError as exc:
-            print(f"  Extraction failed: {exc}. Please try again.\n")
+            ui.print_error(f"Extraction failed: {exc}. Please try again.")
             continue
 
-        print(f"\nHere's what I captured for {section}:\n")
-        print(_format_extracted(section, extracted))
-        print()
+        ui.print_extracted_preview(section, _format_extracted(section, extracted))
 
         while True:
-            answer = input("Does this look right? (yes / edit / skip) > ").strip().lower()
+            answer = input(ui.onboarding_confirm_prompt()).strip().lower()
             if answer == "yes":
                 return _section_to_dict(section, extracted)
             if answer == "skip":
-                print(f"  Skipping {section}.\n")
+                ui.print_step(f"Skipping {section}.")
                 return _empty_section(section)
             if answer == "edit":
-                correction = input("What should be changed? > ").strip()
+                correction = input(ui.onboarding_edit_prompt()).strip()
                 if not correction:
                     continue
                 try:
-                    extracted = extract_section(
-                        section, raw, provider_suite, llm_cfg, correction=correction
-                    )
+                    with ui.thinking_spinner("Applying correction\u2026"):
+                        extracted = extract_section(
+                            section, raw, provider_suite, llm_cfg, correction=correction
+                        )
                 except Exception as exc:  # pylint: disable=broad-exception-caught
-                    print(f"  Re-extraction failed: {exc}. Keeping previous result.\n")
+                    ui.print_error(f"Re-extraction failed: {exc}. Keeping previous result.")
                 else:
-                    print(f"\nUpdated {section}:\n")
-                    print(_format_extracted(section, extracted))
-                    print()
+                    ui.print_extracted_preview(section, _format_extracted(section, extracted))
             else:
-                print("  Please type 'yes', 'edit', or 'skip'.")
+                ui.print_step("Please type 'yes', 'edit', or 'skip'.")
 
 
 def run_onboarding(config: dict, provider_name: str) -> dict:
@@ -166,8 +166,7 @@ def run_onboarding(config: dict, provider_name: str) -> dict:
     )
     llm_cfg = config["llm"]
 
-    print("\nWelcome! No resume.yaml found. Let's build it together.")
-    print("You can type short answers or paste text from your existing resume or LinkedIn.\n")
+    ui.print_onboarding_intro()
 
     sections: dict[str, Any] = {}
     for section in SECTION_ORDER:
@@ -180,5 +179,5 @@ def run_onboarding(config: dict, provider_name: str) -> dict:
     with open(resume_path, "w", encoding="utf-8") as f:
         yaml.dump(resume, f, allow_unicode=True, default_flow_style=False)
 
-    print("\nresume.yaml created. Let's find you some jobs!\n")
+    ui.print_success("resume.yaml created. Let's find you some jobs!")
     return resume

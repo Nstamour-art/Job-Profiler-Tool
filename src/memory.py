@@ -55,8 +55,14 @@ class MemoryManager:
             )
 
     def stop(self) -> None:
-        """No-op — hindsight-client has no persistent connection to close."""
-        return
+        """Close the Hindsight client session."""
+        if self._client is not None:
+            try:
+                self._client.close()
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
+            self._client = None
+            self._available = False
 
     def retain(self, content: str, context: str = "") -> None:
         """Store a fact or experience in the memory bank."""
