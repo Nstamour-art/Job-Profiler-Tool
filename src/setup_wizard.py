@@ -10,7 +10,6 @@ import urllib.error
 from pathlib import Path
 
 import yaml
-from pydantic import ValidationError
 
 # Maps provider name → environment variable name for its API key.
 _API_KEY_VARS: dict[str, str] = {
