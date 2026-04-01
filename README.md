@@ -141,16 +141,18 @@ If you don't have `uv` installed:
 **macOS / Linux:**
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
+curl -LsSf https://astral.sh/uv/0.11.3/install.sh | sh
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/0.11.3/install.ps1 | iex"
 ```
 
 Restart your terminal after installing.
+
+> **Note:** The install scripts (`install.sh` / `install.ps1`) in this repo pin `UV_VERSION` to a specific release for reproducibility. To use a different version, update `UV_VERSION` in the appropriate script for your platform before running.
 
 ### 2. Clone and install dependencies
 

@@ -7,10 +7,14 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "=== Job-Profiler-Tool Setup ===" -ForegroundColor Cyan
 
+# Pin uv to a specific release so the install URL is immutable and reproducible.
+# To upgrade uv: update $UV_VERSION below, then re-run this script.
+$UV_VERSION = "0.11.3"
+
 # 1. Install uv if not already available
 if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
-    Write-Host "Installing uv..." -ForegroundColor Yellow
-    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+    Write-Host "Installing uv ${UV_VERSION}..." -ForegroundColor Yellow
+    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/${UV_VERSION}/install.ps1 | iex"
     # Refresh PATH so uv is available in this session
     $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + $env:PATH
     if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {

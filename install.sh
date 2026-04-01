@@ -5,10 +5,14 @@ set -euo pipefail
 
 echo "=== Job-Profiler-Tool Setup ==="
 
+# Pin uv to a specific release so the install URL is immutable and reproducible.
+# To upgrade uv: update UV_VERSION below, then re-run this script.
+UV_VERSION="0.11.3"
+
 # 1. Install uv if not already available
 if ! command -v uv &>/dev/null; then
-    echo "Installing uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | sh
+    echo "Installing uv ${UV_VERSION}..."
+    curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
     # Source the env file uv's installer creates, or add cargo/bin to PATH
     if [ -f "$HOME/.local/bin/env" ]; then
         # shellcheck disable=SC1091
