@@ -6,6 +6,7 @@ from __future__ import annotations
 import getpass
 import os
 import urllib.request
+import urllib.error
 from pathlib import Path
 
 import yaml
@@ -43,9 +44,9 @@ _PROVIDER_NAMES = ["local", "openai", "anthropic", "gemini", "cloud"]
 def _ollama_reachable() -> bool:
     """Return True if a local Ollama server is responding on localhost:11434."""
     try:
-        urllib.request.urlopen("http://localhost:11434/", timeout=2)
-        return True
-    except Exception:
+        with urllib.request.urlopen("http://localhost:11434/", timeout=2):
+            return True
+    except (OSError, urllib.error.URLError, ConnectionError, TimeoutError):
         return False
 
 
@@ -61,7 +62,7 @@ def _append_env(key: str, value: str, env_path: str = ".env") -> None:
 
 def _prompt_for_api_key(provider_name: str, key_var: str, env_path: str = ".env") -> str:
     """Prompt for an API key, write it to .env, and reload dotenv in the current process."""
-    from dotenv import load_dotenv
+    from dotenv import load_dotenv  # pylint: disable=import-outside-toplevel
     url = _API_KEY_URLS.get(provider_name, "")
     print(f"\n  Get your {provider_name.capitalize()} API key at: {url}")
     key = getpass.getpass(f"  Enter {provider_name.capitalize()} API key: ").strip()
@@ -74,7 +75,7 @@ def _prompt_for_api_key(provider_name: str, key_var: str, env_path: str = ".env"
 
 
 def ensure_provider_ready(
-    provider_name: str, config: dict, env_path: str = ".env"
+    provider_name: str, _config: dict, env_path: str = ".env"
 ) -> None:
     """Verify the requested provider is usable; prompt for setup if not.
 
@@ -89,7 +90,9 @@ def ensure_provider_ready(
     else:
         key_var = _API_KEY_VARS.get(provider_name)
         if key_var is None:
-            raise ValueError(f"Unknown provider: {provider_name!r}. Choose from: {list(_PROVIDER_NAMES)}")
+            raise ValueError(
+                f"Unknown provider: {provider_name!r}. Choose from: {list(_PROVIDER_NAMES)}"
+            )
         if not os.environ.get(key_var, "").strip():
             print(f"\n  {provider_name.capitalize()} API key not found.")
             _prompt_for_api_key(provider_name, key_var, env_path)
@@ -167,16 +170,15 @@ def run_setup_wizard(
             if _ollama_reachable():
                 print("\n  Ollama is running.\n")
                 break
-            else:
-                print("\n  Ollama doesn't appear to be running.")
-                print("  Install it from https://ollama.com, then re-run this tool.")
-                input("\n  Press Enter to choose a different provider, or Ctrl+C to exit.\n> ")
-                # Loop back to provider selection
-        else:
-            key_var = _API_KEY_VARS[provider]
-            if not os.environ.get(key_var, "").strip():
-                _prompt_for_api_key(provider, key_var, env_path)
-            break
+            print("\n  Ollama doesn't appear to be running.")
+            print("  Install it from https://ollama.com, then re-run this tool.")
+            input("\n  Press Enter to choose a different provider, or Ctrl+C to exit.\n> ")
+            # Loop back to provider selection
+            continue
+        key_var = _API_KEY_VARS[provider]
+        if not os.environ.get(key_var, "").strip():
+            _prompt_for_api_key(provider, key_var, env_path)
+        break
 
     # --- Google Sheets (optional) ---
     sheets: dict | None = None

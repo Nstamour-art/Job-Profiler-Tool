@@ -1,10 +1,10 @@
 """Tests for src/setup_wizard.py — provider utilities and ensure_provider_ready."""
 from __future__ import annotations
 
-import os
 import pytest
-from pathlib import Path
+import yaml
 from unittest.mock import patch
+from click.testing import CliRunner
 
 
 # ---------------------------------------------------------------------------
@@ -90,8 +90,6 @@ def test_ensure_provider_ready_gemini_missing_key_calls_prompt(monkeypatch):
 # ---------------------------------------------------------------------------
 # run_setup_wizard
 # ---------------------------------------------------------------------------
-
-import yaml
 
 
 def test_run_setup_wizard_local_writes_config(tmp_path):
@@ -189,9 +187,6 @@ def test_run_setup_wizard_local_unreachable_loops_back_to_menu(tmp_path):
 # main.py — provider default from config
 # ---------------------------------------------------------------------------
 
-import yaml
-from click.testing import CliRunner
-
 
 def test_template_command_uses_config_provider_as_default(tmp_path):
     """When no --provider flag is passed, template should use config["provider"]."""
@@ -239,11 +234,9 @@ def test_run_command_uses_config_provider_as_default(tmp_path):
     resume_path.write_text("basics: {name: Test}")
 
     mock_agent = MagicMock()
-    mock_agent_module = MagicMock()
-    mock_agent_module.run_agent_chat = mock_agent
 
     with patch("src.setup_wizard.ensure_provider_ready"), \
-         patch.dict(sys.modules, {"src.agent": mock_agent_module}):
+         patch("main.run_agent_chat", mock_agent):
         from main import cli
         runner = CliRunner()
         result = runner.invoke(cli, ["run", "--config", str(config_path)])
@@ -273,7 +266,7 @@ def test_run_command_triggers_setup_when_config_missing(tmp_path):
     with patch("src.setup_wizard.run_setup_wizard", return_value=mock_config) as mock_wizard, \
          patch("src.onboarding.run_onboarding", return_value={}) as mock_onboarding, \
          patch("main.run_template_wizard") as mock_template, \
-         patch("src.agent.run_agent_chat") as mock_agent, \
+         patch("main.run_agent_chat") as mock_agent, \
          patch("click.confirm", return_value=False):
         from main import cli
         runner = CliRunner()

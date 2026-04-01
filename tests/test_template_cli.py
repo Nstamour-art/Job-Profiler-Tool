@@ -1,5 +1,4 @@
 # tests/test_template_cli.py
-import pytest
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 
@@ -11,24 +10,26 @@ def test_template_subcommand_exists():
     assert result.exit_code == 0
 
 
-def test_template_subcommand_calls_wizard():
+def test_template_subcommand_calls_wizard(tmp_path):
     from main import cli
     runner = CliRunner()
+    config_path = tmp_path / "config.yaml"
+    config_path.touch()
 
     with patch("main.load_config", return_value={
-            "llm": {}, "paths": {"template_yaml": "template.yaml"}}), \
+            "provider": "local", "llm": {}, "paths": {"template_yaml": "template.yaml"}}), \
+         patch("src.setup_wizard.ensure_provider_ready"), \
          patch("main.run_template_wizard", return_value=MagicMock()) as mock_wiz:
-        result = runner.invoke(cli, ["template"])
+        runner.invoke(cli, ["template", "--config", str(config_path)])
 
     mock_wiz.assert_called_once()
 
 
 def test_run_agent_chat_has_change_template_tool():
     """build_agent includes a change_template tool."""
-    from unittest.mock import MagicMock, patch
     captured_tools = {}
 
-    def fake_create(model, tools, system_prompt):
+    def fake_create(model, tools, system_prompt):  # pylint: disable=unused-argument
         captured_tools["tools"] = [t.name for t in tools]
         return MagicMock()
 

@@ -1,5 +1,4 @@
 from unittest.mock import MagicMock, patch
-import pytest
 
 
 def test_generate_documents_returns_summary(sample_config, sample_resume):

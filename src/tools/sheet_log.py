@@ -31,16 +31,17 @@ def create_sheet_log_tool(config: dict):
             Confirmation string or error message.
         """
         try:
-            append_job_row(
-                config=config,
+            from src.models import JobRow  # pylint: disable=import-outside-toplevel
+            job_row = JobRow(
                 title=title,
                 company=company,
                 url=url,
                 status=status,
                 date_found=date.today().isoformat(),
             )
+            append_job_row(config=config, job_row=job_row)
             return f"Logged '{title}' at {company} to sheet (Status: {status})."
-        except Exception as exc:
-            return f"Sheet logging unavailable: {exc}"
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            return f"Sheet logging failed: {exc}"
 
     return log_job_to_sheet
