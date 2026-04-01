@@ -59,7 +59,7 @@
 <td width="50%">
 
 **🧠 Memory & Logging**
-- Optional persistent memory via Hindsight
+- Encrypted persistent memory across sessions (Fernet AES-128)
 - Google Sheets integration for tracking
 - Automatic fallback across models
 
@@ -175,7 +175,6 @@ OPENAI_API_KEY=your_key_here      # --provider openai
 ANTHROPIC_API_KEY=your_key_here   # --provider anthropic
 GEMINI_API_KEY=your_key_here      # --provider gemini
 TAVILY_API_KEY=your_key_here      # required for agent mode
-HINDSIGHT_BASE_URL=http://localhost:8888  # optional: persistent memory server
 ```
 
 No key is needed for `--provider local` (the default).
@@ -240,7 +239,6 @@ llm:
 agent:
   max_jobs: 10        # max job listings surfaced per search session
   memory_bank: ""     # defaults to resume basics.name if empty
-  memory_model: ""    # defaults to parser_model for your provider if empty
 ```
 
 **`parser_model`** is used for the job description parsing step and resume onboarding extraction — a lightweight model keeps these fast and cheap. If omitted, `model` is used for all stages.
@@ -411,39 +409,27 @@ The setup wizard can configure this for you interactively when you first run the
 
 ---
 
-## 🧠 Persistent Memory with Hindsight (Optional)
+## 🧠 Persistent Memory
 
-The agent can remember facts across sessions — companies you've already applied to, roles you found interesting, search strategies that worked — using [Hindsight](https://github.com/vectorize-io/hindsight), a self-hosted memory server.
+The agent automatically remembers facts across sessions — jobs you've seen, preferences you've expressed, search strategies that worked.
 
-If `HINDSIGHT_BASE_URL` is not set, the agent runs normally without any memory. Nothing breaks.
+No setup required. Memory starts working on first run.
 
-### Setup
+### How it works
 
-**1. Start the Hindsight server with Docker:**
+- **Storage:** `~/.job-profiler/<your-name>.enc` — one encrypted file per user, outside the repo so it is never committed.
+- **Encryption:** [Fernet](https://cryptography.io/en/latest/fernet/) (AES-128-CBC + HMAC-SHA256). The key lives at `~/.job-profiler/.key` with permissions `0o600` (owner read/write only).
+- **Capacity:** The 30 most recent retained facts are injected into the agent's system prompt at the start of each session.
+- **Graceful degradation:** If the key file cannot be created (e.g. read-only filesystem), all memory operations silently no-op — the agent still runs normally.
 
-```bash
-docker run --rm -p 8888:8888 \
-  -e HINDSIGHT_API_LLM_API_KEY=$OPENAI_API_KEY \
-  ghcr.io/vectorize-io/hindsight:latest
-```
+### Optional: customise the memory bank ID
 
-Hindsight uses an OpenAI-compatible LLM to process memories — `HINDSIGHT_API_LLM_API_KEY` must be an OpenAI key (or a compatible one). This is separate from whichever `--provider` you use for the job search itself.
-
-**2. Add the URL to your `.env`:**
-
-```env
-HINDSIGHT_BASE_URL=http://localhost:8888
-```
-
-**3. (Optional) tune memory settings in `config.yaml`:**
+By default the bank ID is your name from `resume.yaml`. To use a different identifier (e.g. to separate different job search campaigns):
 
 ```yaml
 agent:
-  memory_bank: ""     # identifies your memory store — defaults to your name from resume.yaml
-  memory_model: ""    # model used for memory operations — defaults to your parser_model
+  memory_bank: "my-2026-search"   # any string — defaults to resume basics.name
 ```
-
-Once configured, the agent automatically retains and recalls relevant context during each session. Memory is scoped to your `memory_bank` ID, so different users or projects can have separate stores.
 
 ---
 

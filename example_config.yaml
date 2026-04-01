@@ -64,4 +64,3 @@ paths:
 agent:
   max_jobs: 10        # max job listings surfaced per search session
   memory_bank: ""     # defaults to resume basics.name if empty
-  memory_model: ""    # defaults to parser_model for your provider if empty
