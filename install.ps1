@@ -11,8 +11,16 @@ Write-Host "=== Job-Profiler-Tool Setup ===" -ForegroundColor Cyan
 if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     Write-Host "Installing uv..." -ForegroundColor Yellow
     powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-    # Refresh PATH so uv is available in this session
-    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + $env:PATH
+    # Prepend uv's default install locations and the refreshed User-scope PATH
+    # (which the uv installer updates) so uv is found in this session without
+    # relying on $UV_INSTALL_DIR or restarting the terminal. Null-safe
+    # filtering prevents consecutive semicolons if a scope returns empty.
+    $env:PATH = (@(
+        "$env:USERPROFILE\.local\bin",
+        "$env:USERPROFILE\.cargo\bin",
+        [System.Environment]::GetEnvironmentVariable("PATH", "User"),
+        $env:PATH
+    ) | Where-Object { -not [string]::IsNullOrEmpty($_) }) -join ";"
     if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
         Write-Host "ERROR: uv installation failed or is not on PATH." -ForegroundColor Red
         Write-Host "Please restart your terminal and re-run this script." -ForegroundColor Red
