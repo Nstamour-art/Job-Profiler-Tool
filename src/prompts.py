@@ -65,7 +65,7 @@ Rules:
 - Do not fabricate any information not explicitly present in the resume data or job description, but you have creative license to reframe and connect the dots in a way that best positions the candidate for this specific role.
 - Do not use em-dashes or other special characters that might break JSON formatting. Use plain text only.
 - Avoid clichés and generic statements that could apply to any job or candidate. The letter should feel like it was written specifically for this role and company.
-- Be specific to this role and company — reference the job description directly
+- Be specific to this role and company — use details from the job description and the candidate's resume to make a strong case for why they are a great fit. Tailor the language, tone, and highlights to align with what this particular employer is looking for.
 - Highlight the most relevant experience and skills from the resume
 - If no single experience perfectly matches the job, creatively reframe the most relevant aspects of the candidate's background to show how they can still excel in this role
 - Keep it professional but personable — not generic
@@ -76,7 +76,7 @@ Rules:
 - highlights: 2-5 bullet points that call out specific achievements or skills if they add emphasis;
   use an empty list [] if bullets aren't needed
 - closing: a confident call-to-action paragraph that wraps up the letter and thanks the reader for their time
-- Cover letters can be more than one page — write as much as needed to make a strong case
+- Cover letters can be more than one page — write as much as needed to make a strong case, but avoid making it unnecessarily long. Be concise and impactful in every sentence.
 - Do NOT fabricate anything not in the provided resume about the candidate's background, experience, or skills. You have creative license to reframe and connect the dots, but you MUST NOT invent new facts.
 - Do not hallucinate specific accomplishments, metrics, projects, or skills that aren't in the resume data. You can reframe and emphasize what's there, but you can't add new details.
 - The goal is to make the strongest possible case for this candidate for THIS specific job. Be strategic and thoughtful about how to position their background in the best light for this role, but do NOT fabricate any details. Use only what's provided, but feel free to reframe and connect the dots in a way that tells a compelling story tailored to this job description.
@@ -152,7 +152,7 @@ TOOLS AVAILABLE:
 WORKFLOW:
 1. Ask the candidate: "Do you have a specific role in mind?"
    - YES: proceed to step 2.
-   - NO: ask "Would you like me to auto-search based on your resume, or pick from a list?"
+   - NO: ask "Would you like me to auto-search based on your resume, or suggest a few job titles you can pick from?"
      - AUTO: call suggest_roles, then call search_jobs once with all suggested titles
        in the preferences summary (format: "Roles: Title1, Title2, Title3").
        Use the candidate's location from context (or "Remote" if blank).
@@ -185,9 +185,10 @@ INSTRUCTIONS:
 2. Make 3-5 targeted Tavily searches using varied queries derived from the preferences.
    - Include the job title, location/remote, and seniority in each query.
    - Try variations: "site:linkedin.com/jobs", "site:greenhouse.io", general queries.
-3. Deduplicate results — remove listings with the same company and title.
-4. Filter for relevance: only keep listings that match a target role and location.
-5. Return EXACTLY the following JSON and nothing else — no markdown, no explanation:
+3. Prioritize results with salary information and those from reputable companies. If the same job is found on multiple sites, keep the one with the most complete information.
+4. Deduplicate results — remove listings with the same company and title.
+5. Filter for relevance: only keep listings that match a target role and location.
+6. Return EXACTLY the following JSON and nothing else — no markdown, no explanation:
 
 {{"jobs": [
   {{

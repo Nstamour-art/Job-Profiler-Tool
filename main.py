@@ -10,7 +10,9 @@ Usage:
 
 from __future__ import annotations
 
+
 import click
+
 import yaml
 from pathlib import Path
 from dotenv import load_dotenv
@@ -18,6 +20,7 @@ from src.template_agent import run_template_wizard
 from src.models import JobOptions, ProviderSuite
 from src.debug import log_run
 from src.agent import run_agent_chat
+from src import ui
 
 load_dotenv()
 
@@ -172,20 +175,20 @@ def _run_direct_url_mode(
 
     if options.debug_run_id is not None:
         init_db()
-        click.echo(click.style("  Debug mode enabled — logging to debug.db", fg="cyan"))
+        ui.print_step("Debug mode enabled \u2014 logging to debug.db")
 
     job = {"url": direct_url, "job_title": "", "status": "", "details": "", "row": None}
-    click.echo(f"\nProcessing: {direct_url}")
+    ui.print_step(f"Processing: {direct_url}")
     folder, _, resume_json = process_job(
         job, config, load_resume(config["paths"]["resume_yaml"]),
         provider_suite=ps,
         options=options
     )
     if resume_json is not None:
-        click.echo(
-            f"  Priority: {resume_json.priority}/10 — {resume_json.priority_reasoning}"
+        ui.print_step(
+            f"Priority: {resume_json.priority}/10 \u2014 {resume_json.priority_reasoning}"
         )
-    click.echo(click.style(f"\n  Saved to: {folder}", fg="green"))
+    ui.print_success(f"Saved to: {folder}")
 
 
 @cli.command("run")

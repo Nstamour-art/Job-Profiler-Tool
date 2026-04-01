@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import click
 import yaml as _yaml
 
+from src import ui
 from src.scraper import scrape_job, ScraperError
 from src.llm import parse_job_description, generate_resume, generate_cover_letter
 from src.document import build_resume, build_cover_letter
@@ -67,11 +68,11 @@ def _get_job_data(job: dict, url: str) -> dict:
     """Scrape or retrieve cached job description."""
     cached_description = job.get("details", "").strip()
     if cached_description:
-        click.echo("  Using cached job description from sheet.")
+        ui.print_step("Using cached job description from sheet.")
         job_data = {**job, "description": cached_description}
         scraped_fresh = False
     else:
-        click.echo(f"  Scraping {url} …")
+        ui.print_step(f"Scraping {url} \u2026")
         try:
             scraped = scrape_job(url)
         except ScraperError as e:
@@ -91,7 +92,7 @@ def _generate_llm_content(
     from src.models import PipelineResults  # pylint: disable=import-outside-toplevel
     resume_json = None
     if not ctx.options.cover_only:
-        click.echo("  Generating tailored resume …")
+        ui.print_step("Generating tailored resume \u2026")
         resume_json = generate_resume(
             job_details, ctx.resume, ctx.config, ctx.provider_suite.provider, ctx.provider_suite.models
         )
@@ -99,11 +100,11 @@ def _generate_llm_content(
     cover_json = None
     if not ctx.options.resume_only:
         if resume_json is None:
-            click.echo("  Generating resume context for cover letter …")
+            ui.print_step("Generating resume context for cover letter \u2026")
             resume_json = generate_resume(
                 job_details, ctx.resume, ctx.config, ctx.provider_suite.provider, ctx.provider_suite.models
             )
-        click.echo("  Generating cover letter …")
+        ui.print_step("Generating cover letter \u2026")
         cover_json = generate_cover_letter(
             job_details, ctx.resume, resume_json, ctx.config,
             ctx.provider_suite.provider, ctx.provider_suite.models
@@ -198,7 +199,7 @@ def process_job(
     if options.debug_run_id is not None:
         log_scraped(options.debug_run_id, job_data.get("description", ""))
 
-    click.echo("  Parsing job description …")
+    ui.print_step("Parsing job description \u2026")
     job_details = parse_job_description(
         job_data, config, provider_suite.provider, provider_suite.parser_models
     )

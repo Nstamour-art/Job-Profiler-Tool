@@ -19,6 +19,7 @@ from langchain_core.tools import tool as lc_tool
 if TYPE_CHECKING:
     from src.models import ProviderSuite
 
+from src import ui
 from src.memory import MemoryManager
 from src.onboarding import run_onboarding
 from src.prompts import AGENT_SYSTEM_PROMPT_TEMPLATE
@@ -130,6 +131,8 @@ def _recall_memories(memory: MemoryManager) -> str:
 
 def run_agent_chat(config: dict, provider_name: str) -> None:
     """Start the interactive chat loop with the job search agent."""
+    ui.print_banner()
+
     resume_path = config["paths"]["resume_yaml"]
     if not Path(resume_path).exists():
         resume = run_onboarding(config, provider_name)
@@ -146,36 +149,37 @@ def run_agent_chat(config: dict, provider_name: str) -> None:
     agent = build_agent(config, resume, provider_name, recalled, models[0])
     thread_config = {"thread_id": str(uuid.uuid4())}
 
-    print("\nJob Search Agent ready. Type 'exit' to quit.\n")
+    ui.print_greeting(resume["basics"]["name"])
     history: list[dict] = []
 
     try:
         while True:
             try:
-                user_input = input("You: ").strip()
+                user_input = input(ui.user_prompt_text()).strip()
             except (EOFError, KeyboardInterrupt):
-                print("\nJob Agent: Goodbye!")
+                ui.print_newline()
+                ui.print_agent_message("Goodbye!")
                 break
 
             if user_input.lower() in ("exit", "quit", "bye"):
-                print("Job Agent: Goodbye! Good luck with your applications.")
+                ui.print_agent_message("Goodbye! Good luck with your applications.")
                 break
 
             if not user_input:
                 continue
 
             history.append({"role": "user", "content": user_input})
-            print("Job Agent: ", end="", flush=True)
 
             while model_idx < len(models):
                 try:
-                    result = agent.invoke(
-                        {"messages": history},
-                        config=RunnableConfig(configurable=thread_config)
-                    )
+                    with ui.thinking_spinner("Thinking\u2026"):
+                        result = agent.invoke(
+                            {"messages": history},
+                            config=RunnableConfig(configurable=thread_config)
+                        )
                     last_msg = result["messages"][-1]
                     response_text = _extract_response(last_msg)
-                    print(response_text)
+                    ui.print_agent_message(response_text)
                     history = result["messages"]
                     memory.retain(
                         f"User said: {user_input}\nJob Agent responded: {response_text[:300]}",
@@ -185,25 +189,15 @@ def run_agent_chat(config: dict, provider_name: str) -> None:
                 except Exception as e:  # pylint: disable=broad-exception-caught
                     if is_rate_error(e) and model_idx + 1 < len(models):
                         model_idx += 1
-                        print(
-                            f"\n  [{models[model_idx - 1]} overloaded]"
-                            f" Switching to {models[model_idx]}..."
-                        )
+                        ui.print_model_switch(models[model_idx - 1], models[model_idx])
                         agent = build_agent(
                             config, resume, provider_name, recalled, models[model_idx]
                         )
                     else:
-                        print(f"Error: {e}")
+                        ui.print_error(f"Error: {e}")
                         break
     finally:
         memory.stop()
-        import asyncio  # pylint: disable=import-outside-toplevel
-        try:
-            loop = asyncio.get_event_loop()
-            if not loop.is_closed():
-                loop.run_until_complete(asyncio.sleep(0))
-        except Exception:  # pylint: disable=broad-exception-caught
-            pass
 
 
 def _extract_response(message) -> str:
