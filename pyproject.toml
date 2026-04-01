@@ -30,7 +30,7 @@ dependencies = [
     "langchain-ollama>=0.1.0",
     "tavily-python>=0.3.0",
     "langchain-tavily>=0.1.0",
-    "hindsight-client>=0.4.0",
+    "cryptography>=42.0.0",
     "pytest>=8.0.0",
     "langchain-google-vertexai>=3.2.2",
 ]
