@@ -38,7 +38,6 @@ def sample_config():
         "agent": {
             "max_jobs": 10,
             "memory_bank": "",
-            "memory_model": "",
         },
     }
 

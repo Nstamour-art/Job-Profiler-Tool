@@ -1,26 +1,31 @@
 """
-Hindsight memory wrapper for the job search agent.
+LangChain-based persistent memory for the job search agent.
 
-Connects to a user-hosted Hindsight server via HINDSIGHT_BASE_URL env var.
-If the env var is not set or the server is unreachable, all operations
-silently no-op — the agent still works without persistent memory.
+Facts retained during each session are stored in an encrypted file at
+~/.job-profiler/<bank_id>.enc using Fernet (AES-128-CBC + HMAC-SHA256).
+The Fernet key is stored at ~/.job-profiler/.key with mode 0o600.
 
-To run a Hindsight server locally:
-  docker run --rm -p 8888:8888 -e HINDSIGHT_API_LLM_API_KEY=$OPENAI_API_KEY \\
-    ghcr.io/vectorize-io/hindsight:latest
-Then set HINDSIGHT_BASE_URL=http://localhost:8888 in your .env file.
+The public interface (start, stop, retain, recall) is identical to the
+previous Hindsight-backed implementation so src/agent.py needs only minor
+changes.  All operations silently no-op on any error so the agent always
+starts successfully.
 """
 
 from __future__ import annotations
 
+import json
 import os
+import stat
+from pathlib import Path
+
+from cryptography.fernet import Fernet
+from langchain_core.messages import HumanMessage, messages_to_dict, messages_from_dict
+from langchain_core.chat_history import InMemoryChatMessageHistory
 
 
-try:
-    from hindsight_client import Hindsight
-    _CLIENT_AVAILABLE = True
-except ImportError:
-    _CLIENT_AVAILABLE = False
+_MEMORY_DIR = Path.home() / ".job-profiler"
+_KEY_FILE = _MEMORY_DIR / ".key"
+MAX_RECALL_ENTRIES = 30
 
 
 def _resolve_bank_id(config: dict, resume: dict) -> str:
@@ -30,72 +35,89 @@ def _resolve_bank_id(config: dict, resume: dict) -> str:
     )
 
 
+def _get_or_create_key() -> bytes | None:
+    """Return the Fernet key, creating it (and the storage dir) if needed."""
+    try:
+        _MEMORY_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if _KEY_FILE.exists():
+            return _KEY_FILE.read_bytes()
+        key = Fernet.generate_key()
+        _KEY_FILE.write_bytes(key)
+        os.chmod(_KEY_FILE, stat.S_IRUSR | stat.S_IWUSR)
+        return key
+    except Exception:  # pylint: disable=broad-exception-caught
+        return None
+
+
+def _load_history(path: Path, fernet: Fernet) -> InMemoryChatMessageHistory:
+    """Decrypt and deserialise a saved history file into an in-memory store."""
+    history = InMemoryChatMessageHistory()
+    try:
+        if path.exists():
+            raw = fernet.decrypt(path.read_bytes())
+            messages = messages_from_dict(json.loads(raw))
+            history.add_messages(messages)
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+    return history
+
+
+def _save_history(path: Path, fernet: Fernet, history: InMemoryChatMessageHistory) -> None:
+    """Serialise and encrypt the in-memory history to disk."""
+    try:
+        raw = json.dumps(messages_to_dict(history.messages)).encode()
+        path.write_bytes(fernet.encrypt(raw))
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+
+
 class MemoryManager:
-    """Thin wrapper around Hindsight retain/recall for the job search agent."""
+    """Encrypted persistent memory for the job search agent."""
 
     def __init__(self, config: dict, resume: dict, provider_name: str) -> None:  # pylint: disable=unused-argument
         self._bank_id = _resolve_bank_id(config, resume)
-        self._available = False
-        self._client = None
+        self._memory_path = _MEMORY_DIR / f"{self._bank_id}.enc"
+        self._fernet: Fernet | None = None
+        self._history: InMemoryChatMessageHistory | None = None
 
     def start(self) -> None:
-        """Connect to the Hindsight server. Silent no-op if URL not configured."""
-        if not _CLIENT_AVAILABLE:
+        """Load (or initialise) the encrypted memory store."""
+        key = _get_or_create_key()
+        if key is None:
             return
-        base_url = os.environ.get("HINDSIGHT_BASE_URL", "").strip()
-        if not base_url:
-            return
-        try:
-            if not base_url.startswith("http://") and not base_url.startswith("https://"):
-                base_url = "http://" + base_url
-            if _CLIENT_AVAILABLE:
-                self._client = Hindsight(base_url=base_url) # pyright: ignore
-                self._available = True
-        except Exception as exc:  # pylint: disable=broad-exception-caught
-            from src import ui  # pylint: disable=import-outside-toplevel
-            ui.print_warning(
-                f"Could not connect to Hindsight ({exc})"
-                " — running without persistent memory."
-            )
+        self._fernet = Fernet(key)
+        self._history = _load_history(self._memory_path, self._fernet)
 
     def stop(self) -> None:
-        """Close the Hindsight client session."""
-        if self._client is not None:
-            try:
-                self._client.close()
-            except Exception:  # pylint: disable=broad-exception-caught
-                pass
-            self._client = None
-            self._available = False
+        """Persist the current in-memory history to disk."""
+        if self._history is not None and self._fernet is not None:
+            _save_history(self._memory_path, self._fernet, self._history)
 
     def retain(self, content: str, context: str = "") -> None:
-        """Store a fact or experience in the memory bank."""
-        if not self._available or self._client is None:
+        """Append a fact to the memory store and immediately persist it."""
+        if self._history is None or self._fernet is None:
             return
         try:
-            self._client.retain(bank_id=self._bank_id, content=content, context=context)
+            text = f"[{context}] {content}" if context else content
+            self._history.add_message(HumanMessage(content=text))
+            _save_history(self._memory_path, self._fernet, self._history)
         except Exception:  # pylint: disable=broad-exception-caught
-            # Silently ignore errors — memory is optional, agent continues without it
             return
 
-    def recall(self, query: str) -> str:
-        """Retrieve memories relevant to the query. Returns empty string if unavailable."""
-        if not self._available or self._client is None:
-            return ""
-        try:
-            result = self._client.recall(bank_id=self._bank_id, query=query)
-            if isinstance(result, list):
-                return "\n".join(str(r) for r in result)
-            return str(result) if result else ""
-        except Exception:  # pylint: disable=broad-exception-caught
-            return ""
+    def recall(self, query: str = "") -> str:  # pylint: disable=unused-argument
+        """Return the most recent retained entries as a plain-text string.
 
-    def reflect(self, query: str) -> str:
-        """Reflect on memories to generate insights. Returns empty string if unavailable."""
-        if not self._available or self._client is None:
+        The ``query`` parameter is accepted for interface compatibility with
+        callers that pass a search string, but the implementation returns the
+        most recent entries regardless of the query value.
+        """
+        if self._history is None:
             return ""
         try:
-            result = self._client.reflect(bank_id=self._bank_id, query=query)
-            return str(result) if result else ""
+            recent = self._history.messages[-MAX_RECALL_ENTRIES:]
+            return "\n".join(
+                msg.content if isinstance(msg.content, str) else str(msg.content)
+                for msg in recent
+            )
         except Exception:  # pylint: disable=broad-exception-caught
             return ""

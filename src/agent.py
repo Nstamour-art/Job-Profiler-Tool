@@ -1,8 +1,8 @@
 """
 Main job search agent — orchestrator entry point.
 
-Initialises Hindsight memory, builds the Deep Agents orchestrator with all
-tools, and runs the interactive chat loop.
+Initialises persistent encrypted memory, builds the Deep Agents orchestrator
+with all tools, and runs the interactive chat loop.
 """
 
 from __future__ import annotations
@@ -123,10 +123,8 @@ def build_agent(
 
 
 def _recall_memories(memory: MemoryManager) -> str:
-    """Recall preferences and history from the MemoryManager."""
-    recalled_prefs = memory.recall("What are this user's job search preferences?")
-    recalled_jobs = memory.recall("What jobs has this user already been shown?")
-    return "\n".join(filter(None, [recalled_prefs, recalled_jobs]))
+    """Recall the most recent retained facts from the MemoryManager."""
+    return memory.recall()
 
 
 def run_agent_chat(config: dict, provider_name: str) -> None:
