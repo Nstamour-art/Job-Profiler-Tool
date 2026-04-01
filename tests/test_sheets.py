@@ -1,5 +1,4 @@
 from unittest.mock import MagicMock, patch
-import pytest
 
 
 def _make_mock_sheet(headers):
@@ -14,13 +13,16 @@ def test_append_job_row_calls_append_row(sample_config):
 
     with patch("src.sheets._open_sheet", return_value=mock_sheet):
         from src.sheets import append_job_row
+        from src.models import JobRow
         append_job_row(
             config=sample_config,
-            title="AI Engineer",
-            company="Acme Corp",
-            url="https://example.com/job/1",
-            status="Seen",
-            date_found="2026-03-27",
+            job_row=JobRow(
+                title="AI Engineer",
+                company="Acme Corp",
+                url="https://example.com/job/1",
+                status="Seen",
+                date_found="2026-03-27",
+            ),
         )
 
     mock_sheet.append_row.assert_called_once()
@@ -39,13 +41,16 @@ def test_append_job_row_skips_missing_columns(sample_config):
 
     with patch("src.sheets._open_sheet", return_value=mock_sheet):
         from src.sheets import append_job_row
+        from src.models import JobRow
         append_job_row(
             config=sample_config,
-            title="ML Engineer",
-            company="Stripe",
-            url="https://example.com/job/2",
-            status="Seen",
-            date_found="2026-03-27",
+            job_row=JobRow(
+                title="ML Engineer",
+                company="Stripe",
+                url="https://example.com/job/2",
+                status="Seen",
+                date_found="2026-03-27",
+            ),
         )
 
     appended = mock_sheet.append_row.call_args[0][0]

@@ -33,7 +33,7 @@ def _resolve_bank_id(config: dict, resume: dict) -> str:
 class MemoryManager:
     """Thin wrapper around Hindsight retain/recall for the job search agent."""
 
-    def __init__(self, config: dict, resume: dict, provider_name: str) -> None:
+    def __init__(self, config: dict, resume: dict, provider_name: str) -> None:  # pylint: disable=unused-argument
         self._bank_id = _resolve_bank_id(config, resume)
         self._available = False
         self._client = None
@@ -46,14 +46,27 @@ class MemoryManager:
         if not base_url:
             return
         try:
-            self._client = Hindsight(base_url=base_url)
-            self._available = True
-        except Exception as exc:
-            print(f"  [memory] Could not connect to Hindsight ({exc}) — running without persistent memory.")
+            if not base_url.startswith("http://") and not base_url.startswith("https://"):
+                base_url = "http://" + base_url
+            if _CLIENT_AVAILABLE:
+                self._client = Hindsight(base_url=base_url) # pyright: ignore
+                self._available = True
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            from src import ui  # pylint: disable=import-outside-toplevel
+            ui.print_warning(
+                f"Could not connect to Hindsight ({exc})"
+                " — running without persistent memory."
+            )
 
     def stop(self) -> None:
-        """No-op — hindsight-client has no persistent connection to close."""
-        pass
+        """Close the Hindsight client session."""
+        if self._client is not None:
+            try:
+                self._client.close()
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
+            self._client = None
+            self._available = False
 
     def retain(self, content: str, context: str = "") -> None:
         """Store a fact or experience in the memory bank."""
@@ -61,8 +74,9 @@ class MemoryManager:
             return
         try:
             self._client.retain(bank_id=self._bank_id, content=content, context=context)
-        except Exception:
-            pass
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Silently ignore errors — memory is optional, agent continues without it
+            return
 
     def recall(self, query: str) -> str:
         """Retrieve memories relevant to the query. Returns empty string if unavailable."""
@@ -73,7 +87,7 @@ class MemoryManager:
             if isinstance(result, list):
                 return "\n".join(str(r) for r in result)
             return str(result) if result else ""
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             return ""
 
     def reflect(self, query: str) -> str:
@@ -83,5 +97,5 @@ class MemoryManager:
         try:
             result = self._client.reflect(bank_id=self._bank_id, query=query)
             return str(result) if result else ""
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             return ""

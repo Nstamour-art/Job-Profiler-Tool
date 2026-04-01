@@ -1,5 +1,4 @@
 from unittest.mock import MagicMock, patch
-import pytest
 
 
 def test_memory_manager_retain_and_recall(sample_config, sample_resume):

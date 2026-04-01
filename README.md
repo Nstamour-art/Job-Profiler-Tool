@@ -1,8 +1,71 @@
-# Job Profiler Tool
+<div align="center">
 
-An AI-powered job search agent that tailors your resume and cover letter for any job posting. Run once and the agent surfaces relevant listings, generates application documents, and logs results to a Google Sheet — all in one session.
+# ◆ Job Profiler Tool
 
-Supports local Ollama, Ollama Cloud, OpenAI, Anthropic, and Google Gemini via a `--provider` flag.
+**AI-powered job search agent with a rich terminal UI**
+
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776ab?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![License: MIT](https://img.shields.io/badge/license-MIT-22c55e?style=for-the-badge)](LICENSE)
+[![uv](https://img.shields.io/badge/uv-package%20manager-7c3aed?style=for-the-badge)](https://docs.astral.sh/uv/)
+
+> Search jobs · Scrape postings · Tailor your resume & cover letter · All in one session
+
+</div>
+
+---
+
+### Supported Providers
+
+| Provider | Flag | Model examples |
+|:--------:|:----:|:---------------|
+| 🦙 **Ollama** (local) | `--provider local` | `llama3.2` |
+| ☁️ **Ollama Cloud** | `--provider cloud` | `llama3.2` |
+| 🧠 **OpenAI** | `--provider openai` | `gpt-4o`, `gpt-4o-mini` |
+| 🎭 **Anthropic** | `--provider anthropic` | `claude-opus-4-6`, `claude-sonnet-4-6` |
+| 💎 **Google Gemini** | `--provider gemini` | `gemini-2.5-pro`, `gemini-3.0-flash` |
+
+---
+
+## ✨ Features
+
+<table>
+<tr>
+<td width="50%">
+
+**🤖 Interactive Agent**
+- Conversational job search with rich markdown rendering
+- Claude Code-style terminal UI with spinners & panels
+- Agent greets you on launch — no typing needed
+
+</td>
+<td width="50%">
+
+**📄 Document Generation**
+- Tailored resume & cover letter per posting
+- Four professional DOCX themes
+- ATS-friendly formatting
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**🔍 Smart Search**
+- Tavily-powered job discovery
+- Playwright web scraping for full descriptions
+- Priority scoring with reasoning
+
+</td>
+<td width="50%">
+
+**🧠 Memory & Logging**
+- Optional persistent memory via Hindsight
+- Google Sheets integration for tracking
+- Automatic fallback across models
+
+</td>
+</tr>
+</table>
 
 ---
 
@@ -10,11 +73,30 @@ Supports local Ollama, Ollama Cloud, OpenAI, Anthropic, and Google Gemini via a 
 
 ### Agent mode (default)
 
-Running `uv run python main.py run` starts an interactive job search session:
+```
+╭───────────────────────────────── ◆  Job Profiler ─────────────────────────────────╮
+│                                                                                    │
+│  Hello, Jane!                                                                      │
+│                                                                                    │
+│  I'm your job search assistant. Tell me what kind of roles you're                  │
+│  looking for — location, seniority, company, or anything else — and                │
+│  I'll search, tailor your resume, and generate a cover letter for each match.      │
+│                                                                                    │
+│  Type exit to quit at any time.                                                    │
+│                                                                                    │
+╰────────────────────────────────────────────────────────────────────────────────────╯
 
-1. **Resume onboarding** — if `resume.yaml` doesn't exist yet, the tool interviews you section by section before starting. Accepts typed answers or pasted content (LinkedIn profile, old resume, bullet lists). Extracts structured data automatically and asks you to confirm each section before saving.
-2. **Job search loop** — the agent searches for relevant job listings based on your resume, scrapes each posting, and tailors your resume and cover letter to match.
-3. **Sheet logging** — each processed job is logged to your Google Sheet with its priority score and reasoning (optional — see [Google Sheets Setup](#google-sheets-setup-optional)).
+You › Find me backend engineering roles in Toronto
+⠋ Thinking…
+```
+
+Running `uv run python main.py run` starts an interactive session:
+
+1. **🛠 First-run setup** — if `config.yaml` doesn't exist yet, a setup wizard walks you through choosing a provider and (optionally) configuring Google Sheets. Everything is written to `config.yaml` and `.env` automatically.
+2. **📋 Resume onboarding** — if `resume.yaml` doesn't exist yet, the tool interviews you section by section before starting. Accepts typed answers or pasted content (LinkedIn profile, old resume, bullet lists). Extracts structured data automatically and asks you to confirm each section before saving.
+3. **🎨 Template selection** — if `template.yaml` doesn't exist yet, the tool prompts you to pick a resume theme and optionally customize it in natural language.
+4. **🔎 Job search loop** — the agent searches for relevant job listings based on your resume, scrapes each posting, and tailors your resume and cover letter to match.
+5. **📊 Sheet logging** — each processed job is logged to your Google Sheet with its priority score and reasoning (optional — see [Google Sheets Setup](#google-sheets-setup-optional)).
 
 You can also pass a job URL directly to process a single posting without entering the agent loop:
 
@@ -28,34 +110,29 @@ This mode requires `resume.yaml` to already exist.
 
 ## Prerequisites
 
-- Python 3.11+
-- [uv](https://docs.astral.sh/uv/) (package manager)
-- At least one of the following, depending on your chosen `--provider`:
-  - **Local Ollama** (default) — [Ollama](https://ollama.com) installed and running locally, no API key needed
-  - **Ollama Cloud** (`--provider cloud`) — an Ollama Cloud account and `OLLAMA_API_KEY`
-  - **OpenAI** (`--provider openai`) — an OpenAI account and `OPENAI_API_KEY`
-  - **Anthropic** (`--provider anthropic`) — an Anthropic account and `ANTHROPIC_API_KEY`
-  - **Google Gemini** (`--provider gemini`) — a Google AI Studio account and `GEMINI_API_KEY`
-- **Agent mode only:** a [Tavily](https://tavily.com) account and `TAVILY_API_KEY` (free tier available)
+| Requirement | Details |
+|:------------|:--------|
+| **Python** | 3.11+ |
+| **Package manager** | [uv](https://docs.astral.sh/uv/) |
+| **LLM provider** | At least one — see [provider table](#supported-providers) above |
+| **Search** | [Tavily](https://tavily.com) API key (free tier, agent mode only) |
+
+<details>
+<summary><b>Provider API keys</b></summary>
+
+| Provider | Key variable |
+|:---------|:-------------|
+| Ollama (local) | _none needed_ |
+| Ollama Cloud | `OLLAMA_API_KEY` |
+| OpenAI | `OPENAI_API_KEY` |
+| Anthropic | `ANTHROPIC_API_KEY` |
+| Google Gemini | `GEMINI_API_KEY` |
+
+</details>
 
 ---
 
-## Required Files
-
-Before running the tool, you need two files in place. Both are gitignored and must be created locally:
-
-| File | Source | Purpose |
-| --- | --- | --- |
-| `.env` | Copy from `.env.example` | API key(s) for your chosen provider |
-| `config.yaml` | Copy from `example_config.yaml` | Model and path settings |
-
-`resume.yaml` is created automatically the first time you run `uv run python main.py run` (agent mode). You can also create it manually by copying `example_resume.yaml`.
-
-`credentials/google_service_account.json` is optional — only needed for Google Sheets logging.
-
----
-
-## Getting Started
+## 🚀 Getting Started
 
 ### 1. Install uv
 
@@ -84,13 +161,13 @@ uv sync
 uv run playwright install chromium
 ```
 
-### 3. Set up environment variables
+### 3. Add your API keys
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and add the API key for your chosen provider:
+Edit `.env` and add the key(s) you need:
 
 ```env
 OLLAMA_API_KEY=your_key_here      # --provider cloud
@@ -98,18 +175,31 @@ OPENAI_API_KEY=your_key_here      # --provider openai
 ANTHROPIC_API_KEY=your_key_here   # --provider anthropic
 GEMINI_API_KEY=your_key_here      # --provider gemini
 TAVILY_API_KEY=your_key_here      # required for agent mode
-HINDSIGHT_BASE_URL=http://localhost:8888  # optional: Hindsight memory server
+HINDSIGHT_BASE_URL=http://localhost:8888  # optional: persistent memory server
 ```
 
 No key is needed for `--provider local` (the default).
 
-### 4. Configure the tool
+### 4. Run
+
+```bash
+uv run python main.py run
+```
+
+If `config.yaml` doesn't exist yet, the setup wizard runs automatically — it will ask you to choose a provider, optionally configure Google Sheets, and write everything to `config.yaml`. From there, resume onboarding and template selection follow in the same session.
+
+To configure manually instead, copy the examples:
 
 ```bash
 cp example_config.yaml config.yaml
+cp example_resume.yaml resume.yaml   # optional — wizard can build this interactively
 ```
 
-Edit `config.yaml` to set your models and paths. Each provider has its own subsection for `model` and `parser_model`:
+---
+
+## ⚙️ Configuration
+
+`config.yaml` controls model selection, paths, and agent behaviour. Each provider has its own subsection for `model` and `parser_model`:
 
 ```yaml
 llm:
@@ -131,21 +221,21 @@ llm:
     parser_fallback_models: []
 
   anthropic:
-    model: "claude-opus-4-6"
+    model: "claude-sonnet-4-6"
     fallback_models:
-      - "claude-sonnet-4-6"
+      - "claude-opus-4-6" 
       - "claude-haiku-4-5-20251001"
     parser_model: "claude-haiku-4-5-20251001"
     parser_fallback_models: []
 
   gemini:
-    model: "gemini-2.5-pro-preview-03-25"
+    model: "gemini-2.5-pro"
     fallback_models:
-      - "gemini-2.0-flash"
-      - "gemini-2.0-flash-lite"
-    parser_model: "gemini-2.0-flash"
+      - "gemini-3.0-flash"
+      - "gemini-3.0-flash-lite"
+    parser_model: "gemini-3.0-flash"
     parser_fallback_models:
-      - "gemini-2.0-flash-lite"
+      - "gemini-3.0-flash-lite"
 
 agent:
   max_jobs: 10        # max job listings surfaced per search session
@@ -161,7 +251,9 @@ agent:
 
 **`agent.max_jobs`** caps how many job listings the agent surfaces per session.
 
-## Resume Templates
+---
+
+## 🎨 Resume Templates
 
 The tool ships with four named themes. Your choice is saved to `template.yaml` and applied to every document generated after that.
 
@@ -186,39 +278,26 @@ uv run python main.py template --provider anthropic
 
 The wizard lets you describe customizations in plain language after picking a theme:
 
-```text
-Choose a resume template:
+```
+──────────────────── Template Selection ────────────────────
 
-  1. Classic   — Arial, black on white, centered headings with ruled borders
-  2. Modern    — Calibri, navy accent, left-aligned name, underlined headings
-  3. Creative  — Georgia serif, dark sidebar layout
-  4. Minimal   — Helvetica Neue, no borders, grey section labels, generous margins
+  1 ─ Classic    Arial, black on white, ruled borders
+  2 ─ Modern     Calibri, navy accent, underlined headings
+  3 ─ Creative   Georgia serif, dark sidebar layout
+  4 ─ Minimal    Helvetica Neue, no borders, grey labels
 
-Enter 1–4: 2
+Enter 1–4 › 2
 
-Anything to customize? (font name, size, accent color — or press Enter for defaults)
-> 12pt body text and dark green accent
+Anything to customize? (font, size, accent color — Enter for defaults)
+› 12pt body text and dark green accent
+⠋ Applying customization…
 ```
 
 Your selection is saved to `template.yaml` (gitignored). You can re-run `template` at any time to switch themes. In agent mode, just tell the agent you want to change your template and it will launch the wizard for you.
 
 ---
 
-## Usage
-
-```bash
-# Start an agent job search session (local Ollama)
-uv run python main.py run
-
-# Use a different provider
-uv run python main.py run --provider anthropic
-```
-
-If `resume.yaml` doesn't exist yet, the tool will walk you through building it interactively before starting the search. You can type answers or paste directly from LinkedIn, a PDF copy, or an old resume — the tool extracts the structured data automatically.
-
----
-
-## Usage
+## 💻 Usage
 
 ### Agent mode
 
@@ -246,10 +325,6 @@ Output files are saved to `output/<Company>_<Role>_<date>/`.
 | Flag | Description |
 | --- | --- |
 | `--url <url>` | Process a single job URL directly, no Google Sheet needed |
-| `template` | Interactively choose and customize your resume template |
-| `--row <n>` | Process a specific row number from the Google Sheet |
-| `--all` | Process all rows where Status is blank |
-| `--url <url>` | Process a single job URL directly (skips agent loop) |
 | `--provider` | LLM backend: `local` (default), `cloud`, `openai`, `anthropic`, `gemini` |
 | `--resume-only` | Generate only the resume, skip the cover letter |
 | `--cover-only` | Generate only the cover letter, skip the resume |
@@ -258,23 +333,31 @@ Output files are saved to `output/<Company>_<Role>_<date>/`.
 
 ---
 
-## Resume Onboarding
+## 📋 Resume Onboarding
 
 When `resume.yaml` doesn't exist, the tool automatically runs a guided interview before starting the job search:
 
-```text
-Let's start with your basic info. What's your name, email, phone, location,
-and any LinkedIn or GitHub profiles? You can type it out or paste from your profile.
-> ...
+```
+╭─────────────────────────── Resume Onboarding ───────────────────────────╮
+│                                                                          │
+│  Let's start with your basic info. What's your name, email, phone,       │
+│  location, and any LinkedIn or GitHub profiles?                          │
+│                                                                          │
+│  You can type it out or paste from your profile.                         │
+│                                                                          │
+╰──────────────────────────────────────────────────────────────────────────╯
 
-Here's what I captured for your basic info:
+You › Jane Doe, jane@example.com, Toronto ON, github.com/janedoe
+⠋ Parsing your input…
 
-  Name: Jane Doe
-  Email: jane@example.com
-  ...
+╭──────────────── Extracted ────────────────╮
+│  Name:     Jane Doe                       │
+│  Email:    jane@example.com               │
+│  Location: Toronto, ON                    │
+│  GitHub:   github.com/janedoe             │
+╰───────────────────────────────────────────╯
 
-Does this look right? (yes / edit / skip)
->
+Does this look right? (yes / edit / skip) ›
 ```
 
 - **yes** — section saved, move to next
@@ -289,7 +372,7 @@ After all sections are confirmed, `resume.yaml` is written and the job search lo
 
 ---
 
-## Google Sheets Setup (Optional)
+## 📊 Google Sheets Setup (Optional)
 
 Only needed if you want the agent to log processed jobs to a spreadsheet.
 
@@ -321,25 +404,63 @@ Your sheet should have columns matching the names configured above. After each j
 | --- | --- |
 | **Status** | `Generated` |
 | **Details** | Scraped job description |
-| **Priority** | 1-10 score (1 = apply immediately, 10 = low priority) |
+| **Priority** | 1–10 score (1 = apply immediately, 10 = low priority) |
 | **Reasoning** | One-sentence explanation of the priority score |
+
+The setup wizard can configure this for you interactively when you first run the tool.
 
 ---
 
-## Output
+## 🧠 Persistent Memory with Hindsight (Optional)
 
-Each run creates a timestamped folder under `output/`. Files are named after the candidate and role:
+The agent can remember facts across sessions — companies you've already applied to, roles you found interesting, search strategies that worked — using [Hindsight](https://github.com/vectorize-io/hindsight), a self-hosted memory server.
 
-```text
+If `HINDSIGHT_BASE_URL` is not set, the agent runs normally without any memory. Nothing breaks.
+
+### Setup
+
+**1. Start the Hindsight server with Docker:**
+
+```bash
+docker run --rm -p 8888:8888 \
+  -e HINDSIGHT_API_LLM_API_KEY=$OPENAI_API_KEY \
+  ghcr.io/vectorize-io/hindsight:latest
+```
+
+Hindsight uses an OpenAI-compatible LLM to process memories — `HINDSIGHT_API_LLM_API_KEY` must be an OpenAI key (or a compatible one). This is separate from whichever `--provider` you use for the job search itself.
+
+**2. Add the URL to your `.env`:**
+
+```env
+HINDSIGHT_BASE_URL=http://localhost:8888
+```
+
+**3. (Optional) tune memory settings in `config.yaml`:**
+
+```yaml
+agent:
+  memory_bank: ""     # identifies your memory store — defaults to your name from resume.yaml
+  memory_model: ""    # model used for memory operations — defaults to your parser_model
+```
+
+Once configured, the agent automatically retains and recalls relevant context during each session. Memory is scoped to your `memory_bank` ID, so different users or projects can have separate stores.
+
+---
+
+## 📁 Output
+
+Each run creates a timestamped folder under `output/`:
+
+```
 output/
-  CGI_AI_Engineering_2026-03-10/
-    John Doe - Some Job Title - Resume.docx
-    John Doe - Some Job Title - Cover Letter.docx
+└── CGI_AI_Engineering_2026-03-10/
+    ├── Jane Doe - AI Engineer - Resume.docx
+    └── Jane Doe - AI Engineer - Cover Letter.docx
 ```
 
 ---
 
-## Disclaimer
+## ⚠️ Disclaimer
 
 This tool is intended for **personal use only**. The web scraping feature is provided as a convenience for individuals automating their own job search.
 
@@ -351,6 +472,12 @@ Use at your own discretion.
 
 ---
 
-## License
+## 📄 License
 
 MIT — see [LICENSE](LICENSE).
+
+---
+
+<div align="center">
+<sub>Built with ❤️ and too much coffee</sub>
+</div>

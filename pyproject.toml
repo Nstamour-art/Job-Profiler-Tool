@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "beautifulsoup4>=4.14.3",
     "click>=8.1.8",
+    "rich>=13.0.0",
     "google-auth>=2.49.0",
     "gspread>=6.2.1",
     "ollama>=0.6.1",
@@ -31,10 +32,13 @@ dependencies = [
     "langchain-tavily>=0.1.0",
     "hindsight-client>=0.4.0",
     "pytest>=8.0.0",
+    "langchain-google-vertexai>=3.2.2",
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["." ]
+pythonpath = ["."]
 
-
-
+[dependency-groups]
+dev = [
+    "pylint>=4.0.5",
+]

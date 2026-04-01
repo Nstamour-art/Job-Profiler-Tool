@@ -1,12 +1,11 @@
 # tests/test_onboarding.py
 import yaml
-import pytest
 from unittest.mock import patch, MagicMock
 
 from src.resume_models import (
     BasicsSection, WorkSection, WorkEntry,
-    EducationSection, SkillsSection, ProjectsSection, CertificatesSection,
 )
+from src.models import ProviderSuite
 
 
 # ---------------------------------------------------------------------------
@@ -31,11 +30,12 @@ def test_extract_section_basics_calls_call_with_retry(sample_config):
 def test_extract_section_correction_appends_to_input(sample_config):
     mock_provider = MagicMock()
     expected = BasicsSection(name="Jane Smith")
+    ps = ProviderSuite(provider=mock_provider, models=["model"], parser_models=["model"], name="local")
 
     with patch("src.onboarding._call_with_retry", return_value=expected) as mock_retry:
         from src.onboarding import extract_section
         extract_section(
-            "basics", "Jane Doe", mock_provider, ["model"], sample_config["llm"],
+            "basics", "Jane Doe", ps, sample_config["llm"],
             correction="My last name is Smith",
         )
 
@@ -94,11 +94,12 @@ def test_interview_section_yes_flow(sample_config):
     mock_provider = MagicMock()
     expected = BasicsSection(name="Jane Doe", email="jane@example.com")
     inputs = iter(["Jane Doe, jane@example.com", "yes"])
+    ps = ProviderSuite(provider=mock_provider, models=["model"], parser_models=["model"], name="local")
 
     with patch("src.onboarding.extract_section", return_value=expected):
         with patch("builtins.input", side_effect=inputs):
             from src.onboarding import _interview_section
-            result = _interview_section("basics", mock_provider, ["model"], sample_config["llm"])
+            result = _interview_section("basics", ps, sample_config["llm"])
 
     assert result["name"] == "Jane Doe"
 
@@ -110,10 +111,11 @@ def test_interview_section_yes_flow(sample_config):
 def test_interview_section_skip_at_prompt_returns_empty(sample_config):
     mock_provider = MagicMock()
     inputs = iter(["skip"])
+    ps = ProviderSuite(provider=mock_provider, models=["model"], parser_models=["model"], name="local")
 
     with patch("builtins.input", side_effect=inputs):
         from src.onboarding import _interview_section
-        result = _interview_section("work", mock_provider, ["model"], sample_config["llm"])
+        result = _interview_section("work", ps, sample_config["llm"])
 
     assert result == []
 
@@ -122,11 +124,12 @@ def test_interview_section_skip_at_confirm_returns_empty(sample_config):
     mock_provider = MagicMock()
     expected = WorkSection(work=[WorkEntry(name="Acme")])
     inputs = iter(["Acme Corp, Engineer, 2022-present", "skip"])
+    ps = ProviderSuite(provider=mock_provider, models=["model"], parser_models=["model"], name="local")
 
     with patch("src.onboarding.extract_section", return_value=expected):
         with patch("builtins.input", side_effect=inputs):
             from src.onboarding import _interview_section
-            result = _interview_section("work", mock_provider, ["model"], sample_config["llm"])
+            result = _interview_section("work", ps, sample_config["llm"])
 
     assert result == []
 
@@ -182,7 +185,7 @@ def test_interview_section_edit_reextraction_failure_keeps_original(sample_confi
 
     call_count = {"n": 0}
 
-    def fake_extract(*args, **kwargs):
+    def fake_extract(*_args, **_kwargs):
         call_count["n"] += 1
         if call_count["n"] == 1:
             return original
@@ -191,10 +194,11 @@ def test_interview_section_edit_reextraction_failure_keeps_original(sample_confi
     # Inputs: initial answer, "edit" at confirm, correction text, "yes" at second confirm
     inputs = iter(["Jane Doe", "edit", "fix something", "yes"])
 
+    ps = ProviderSuite(provider=mock_provider, models=["model"], parser_models=["model"], name="local")
     with patch("src.onboarding.extract_section", side_effect=fake_extract):
         with patch("builtins.input", side_effect=inputs):
             from src.onboarding import _interview_section
-            result = _interview_section("basics", mock_provider, ["model"], sample_config["llm"])
+            result = _interview_section("basics", ps, sample_config["llm"])
 
     # Should return original extracted value, not crash
     assert result["name"] == "Jane Doe"

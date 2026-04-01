@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class ThemeConfig(BaseModel):
+    """Complete styling configuration for a resume (colors, fonts, layout, margins)."""
     name: str = "classic"
     layout: str = "standard"          # "standard" | "sidebar"
     font: str = "Arial"

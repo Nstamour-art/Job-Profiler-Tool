@@ -14,12 +14,17 @@ from deepagents import create_deep_agent
 from src.prompts import SEARCH_SUBAGENT_SYSTEM_PROMPT
 
 
-def create_search_tool(agent_model, tavily_api_key: str, max_jobs: int = 10):
-    """Return a search_jobs LangChain tool that uses a Tavily search sub-agent."""
-    from langchain_tavily import TavilySearch
+def create_search_tool(agent_model, tavily_api_key: str, max_jobs: int = 10, parser_model=None):
+    """Return a search_jobs LangChain tool that uses a Tavily search sub-agent.
+
+    The search sub-agent uses parser_model (a lightweight model) when provided,
+    falling back to agent_model. Heavy reasoning is not needed for search.
+    """
+    from langchain_tavily import TavilySearch  # pylint: disable=import-outside-toplevel
 
     tavily = TavilySearch(max_results=30, tavily_api_key=tavily_api_key)
     system_prompt = SEARCH_SUBAGENT_SYSTEM_PROMPT.replace("{max_jobs}", str(max_jobs))
+    search_model = parser_model if parser_model is not None else agent_model
 
     @lc_tool
     def search_jobs(preferences_summary: str) -> str:
@@ -35,7 +40,7 @@ def create_search_tool(agent_model, tavily_api_key: str, max_jobs: int = 10):
         """
         try:
             sub_agent = create_deep_agent(
-                model=agent_model,
+                model=search_model,
                 tools=[tavily],
                 system_prompt=system_prompt,
             )
@@ -43,7 +48,7 @@ def create_search_tool(agent_model, tavily_api_key: str, max_jobs: int = 10):
                 "messages": [{"role": "user", "content": preferences_summary}]
             })
             return result["messages"][-1].content
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             return f"Search failed: {exc}"
 
     return search_jobs

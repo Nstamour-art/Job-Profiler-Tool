@@ -11,18 +11,21 @@ from pydantic import BaseModel, Field
 
 
 class Profile(BaseModel):
+    """A social media or professional network profile (LinkedIn, GitHub, etc.)."""
     network: str = ""
     username: str = ""
     url: str = ""
 
 
 class Location(BaseModel):
+    """Geographic location with city, region, and country code."""
     city: str = ""
     region: str = ""
     countryCode: str = ""
 
 
 class BasicsSection(BaseModel):
+    """Resume basics: name, contact info, location, and social profiles."""
     name: str = ""
     email: str = ""
     phone: str = ""
@@ -32,6 +35,7 @@ class BasicsSection(BaseModel):
 
 
 class WorkEntry(BaseModel):
+    """A single work experience with employer, role, dates, and accomplishments."""
     name: str = ""
     location: str = ""
     position: str = ""
@@ -42,10 +46,12 @@ class WorkEntry(BaseModel):
 
 
 class WorkSection(BaseModel):
+    """Container for all work experience entries."""
     work: list[WorkEntry] = Field(default_factory=list)
 
 
 class EducationEntry(BaseModel):
+    """A single education entry with institution, degree, field, and dates."""
     institution: str = ""
     area: str = ""
     studyType: str = ""
@@ -56,19 +62,23 @@ class EducationEntry(BaseModel):
 
 
 class EducationSection(BaseModel):
+    """Container for all education entries."""
     education: list[EducationEntry] = Field(default_factory=list)
 
 
 class SkillGroup(BaseModel):
+    """A named group of skills or technologies."""
     name: str = ""
     keywords: list[str] = Field(default_factory=list)
 
 
 class SkillsSection(BaseModel):
+    """Container for all skill groups."""
     skills: list[SkillGroup] = Field(default_factory=list)
 
 
 class Project(BaseModel):
+    """A portfolio project with name, description, URL, and highlights."""
     name: str = ""
     description: str = ""
     url: str = ""
@@ -76,15 +86,18 @@ class Project(BaseModel):
 
 
 class ProjectsSection(BaseModel):
+    """Container for all portfolio projects."""
     projects: list[Project] = Field(default_factory=list)
 
 
 class Certificate(BaseModel):
+    """A certification or credential with name and issuing organization."""
     name: str = ""
     issuer: str = ""
 
 
 class CertificatesSection(BaseModel):
+    """Container for all certifications."""
     certificates: list[Certificate] = Field(default_factory=list)
 
 

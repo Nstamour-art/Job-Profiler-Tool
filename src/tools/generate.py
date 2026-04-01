@@ -11,13 +11,13 @@ from __future__ import annotations
 from langchain_core.tools import tool as lc_tool
 
 from src.pipeline import process_job
-from src.providers import LLMProvider
+from src.providers import BaseProvider
 
 
 def create_generate_tool(
     config: dict,
     resume: dict,
-    provider: LLMProvider,
+    provider: BaseProvider,
     models: list[str],
     parser_models: list[str],
 ):
@@ -44,8 +44,10 @@ def create_generate_tool(
             "row": None,
         }
         try:
+            from src.models import JobOptions, ProviderSuite  # pylint: disable=import-outside-toplevel
+            ps = ProviderSuite(provider=provider, models=models, parser_models=parser_models, name="")
             folder, _, resume_json = process_job(
-                job, config, resume, provider, models, parser_models
+                job, config, resume, provider_suite=ps, options=JobOptions()
             )
             priority_msg = ""
             if resume_json is not None:
@@ -57,7 +59,7 @@ def create_generate_tool(
                 f"Generated documents for {company} ({job_title}). "
                 f"Saved to {folder}.{priority_msg}"
             )
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-exception-caught
             return f"Failed to generate documents for {company} ({job_title}): {exc}"
 
     return generate_documents
