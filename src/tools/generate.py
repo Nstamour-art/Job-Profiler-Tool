@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from langchain_core.tools import tool as lc_tool
 
+from src.models import Outcome
 from src.pipeline import process_job
 from src.providers import BaseProvider
 
@@ -46,7 +47,7 @@ def create_generate_tool(
         try:
             from src.models import JobOptions, ProviderSuite  # pylint: disable=import-outside-toplevel
             ps = ProviderSuite(provider=provider, models=models, parser_models=parser_models, name="")
-            folder, _, resume_json = process_job(
+            folder, _, resume_json, sheet_outcome = process_job(
                 job, config, resume, provider_suite=ps, options=JobOptions()
             )
             priority_msg = ""
@@ -55,9 +56,10 @@ def create_generate_tool(
                     f" Priority: {resume_json.priority}/10 "
                     f"— {resume_json.priority_reasoning}"
                 )
+            warning_msg = f" ⚠️ {sheet_outcome.message}" if not sheet_outcome.success else ""
             return (
                 f"Generated documents for {company} ({job_title}). "
-                f"Saved to {folder}.{priority_msg}"
+                f"Saved to {folder}.{priority_msg}{warning_msg}"
             )
         except Exception as exc:  # pylint: disable=broad-exception-caught
             return f"Failed to generate documents for {company} ({job_title}): {exc}"

@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock, patch
 
+from src.models import Outcome
+
 
 def test_generate_documents_returns_summary(sample_config, sample_resume):
     fake_resume_json = MagicMock()
@@ -7,7 +9,8 @@ def test_generate_documents_returns_summary(sample_config, sample_resume):
     fake_resume_json.priority_reasoning = "Strong match."
 
     with patch("src.tools.generate.process_job",
-               return_value=("output/Acme_AI_Engineer_2026-03-27", {}, fake_resume_json)):
+               return_value=("output/Acme_AI_Engineer_2026-03-27", {}, fake_resume_json,
+                             Outcome(success=True, message="Job logged to Google Sheets."))):
         from src.tools.generate import create_generate_tool
         gen_tool = create_generate_tool(
             config=sample_config,

@@ -9,8 +9,6 @@ import re
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
-
-import click
 import yaml as _yaml
 
 from src import ui
@@ -19,6 +17,8 @@ from src.llm import parse_job_description, generate_resume, generate_cover_lette
 from src.document import build_resume, build_cover_letter
 from src.debug import log_scraped, log_job_details, log_resume, log_cover_letter, log_output_folder
 from src.themes import ThemeConfig, CLASSIC, PRESETS, merge_overrides, TemplateOverrides
+from src.sheets import append_job_row
+from src.models import Outcome
 
 if TYPE_CHECKING:
     from src.models import ResumeJSON, JobDetails, JobOptions, PipelineContext, PipelineResults, ProviderSuite
@@ -76,7 +76,7 @@ def _get_job_data(job: dict, url: str) -> dict:
         try:
             scraped = scrape_job(url)
         except ScraperError as e:
-            raise click.ClickException(str(e)) from e
+            raise ScraperError(str(e)) from e
         job_data = {**job, **scraped}
         scraped_fresh = True
 
@@ -176,15 +176,15 @@ def process_job(
     resume: dict,
     provider_suite: "ProviderSuite",
     options: "JobOptions | None" = None,
-) -> tuple[str, dict, "ResumeJSON | None"]:
+) -> tuple[str, dict, "ResumeJSON | None", "Outcome"]:
     """
     Full pipeline for one job:
       scrape (or use cached details) → parse → LLM resume → LLM cover letter → write docx
-    Returns (output_directory_path, job_data, resume_json).
+    Returns (output_directory_path, job_data, resume_json, sheet_outcome).
     """
     from src.models import PipelineContext, JobOptions  # pylint: disable=import-outside-toplevel
     options = options or JobOptions()
-    ctx = PipelineContext(
+    context = PipelineContext(
         config=config,
         resume=resume,
         provider_suite=provider_suite,
@@ -206,7 +206,7 @@ def process_job(
     if options.debug_run_id is not None:
         log_job_details(options.debug_run_id, job_details)
 
-    results = _generate_llm_content(ctx, job_details)
+    results = _generate_llm_content(context, job_details)
     if options.debug_run_id is not None:
         if results.resume_json is not None:
             log_resume(options.debug_run_id, results.resume_json)
@@ -218,6 +218,36 @@ def process_job(
     if options.debug_run_id is not None:
         log_output_folder(options.debug_run_id, str(folder))
 
-    _save_documents(ctx, folder, theme, results)
+    _save_documents(context, folder, theme, results)
 
-    return str(folder), job_data, results.resume_json
+    sheet_warning = _log_to_sheet(config, job_data, job_details, results)
+
+    return str(folder), job_data, results.resume_json, sheet_warning
+
+
+def _log_to_sheet(config: dict, job_data: dict, job_details: "JobDetails", results: "PipelineResults") -> "Outcome":
+    """Append a row to Google Sheets after successful document generation.
+
+    Returns Outcome(success=True, ...) on success or Outcome(success=False, ...) on failure.
+    Never raises — sheet failure must not abort document generation.
+    """
+    from src.models import JobRow  # pylint: disable=import-outside-toplevel
+    try:
+        resume_json = results.resume_json
+        priority = str(resume_json.priority) if resume_json is not None else ""
+        reasoning = resume_json.priority_reasoning if resume_json is not None else ""
+        details = (job_data.get("description") or "")[:500]
+        job_row = JobRow(
+            title=job_details.title or job_data.get("job_title", ""),
+            company=job_details.company or job_data.get("company", ""),
+            url=job_data.get("url", ""),
+            status="Generated",
+            date_found=date.today().isoformat(),
+            details=details,
+            priority=priority,
+            reasoning=reasoning,
+        )
+        append_job_row(config=config, job_row=job_row)
+        return Outcome(success=True, message="Job logged to Google Sheets.")
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        return Outcome(success=False, message=f"Sheet logging failed: {exc}")

@@ -129,7 +129,6 @@ def test_build_agent_includes_suggest_roles_tool():
          patch("src.agent.create_search_tool", return_value=MagicMock(name="search_jobs")), \
          patch("src.agent.create_generate_tool", return_value=MagicMock(name="generate_documents")), \
          patch("src.agent.create_resume_tools", return_value=(MagicMock(), MagicMock())), \
-         patch("src.agent.create_sheet_log_tool", return_value=MagicMock()), \
          patch("src.agent.create_suggest_roles_tool", return_value=MagicMock(name="suggest_roles")) as mock_suggest, \
          patch.dict(os.environ, {"TAVILY_API_KEY": "test"}):
         from src.agent import build_agent

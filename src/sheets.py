@@ -78,22 +78,49 @@ def append_job_row(
 ) -> None:
     """Append a new job row to the sheet.
 
-    Aligns values to the sheet's header row. Skips any column not present in the sheet.
+    Aligns values to the sheet's header row.
+    If a row with a matching URL already exists, updates it in-place instead of appending.
+    Skips any column not present in the sheet.
     """
     sheet = _open_sheet(config)
     cols = config["google_sheets"]["columns"]
     headers = sheet.row_values(1)
 
-    row = [""] * len(headers)
     field_map = {
         "job_title": job_row.title,
         "company": job_row.company,
         "url": job_row.url,
         "status": job_row.status,
         "date_found": job_row.date_found,
+        "details": job_row.details,
         "priority": job_row.priority,
         "reasoning": job_row.reasoning,
     }
+
+    # Check for an existing row with the same URL and update it instead of duplicating.
+    url_col_name = cols.get("url", "")
+    existing_row_index: int | None = None
+    if url_col_name and url_col_name in headers:
+        url_col_index = headers.index(url_col_name) + 1  # 1-based
+        url_values = sheet.col_values(url_col_index)
+        for i, cell_value in enumerate(url_values[1:], start=2):  # skip header row
+            if cell_value == job_row.url:
+                existing_row_index = i
+                break
+
+    if existing_row_index is not None:
+        updates = []
+        for field, value in field_map.items():
+            col_name = cols.get(field, "")
+            if col_name and col_name in headers:
+                col_index = headers.index(col_name) + 1
+                cell = gspread.utils.rowcol_to_a1(existing_row_index, col_index)
+                updates.append({"range": cell, "values": [[value]]})
+        if updates:
+            sheet.batch_update(updates)
+        return
+
+    row = [""] * len(headers)
     for field, value in field_map.items():
         col_name = cols.get(field, "")
         if col_name and col_name in headers:

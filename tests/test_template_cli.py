@@ -48,8 +48,7 @@ def test_run_agent_chat_has_change_template_tool():
          patch("src.agent.get_provider", return_value=MagicMock()), \
          patch("src.agent.create_search_tool", return_value=MagicMock()), \
          patch("src.agent.create_generate_tool", return_value=MagicMock()), \
-         patch("src.agent.create_resume_tools", return_value=(MagicMock(), MagicMock())), \
-         patch("src.agent.create_sheet_log_tool", return_value=MagicMock()):
+         patch("src.agent.create_resume_tools", return_value=(MagicMock(), MagicMock())):
         from src.agent import build_agent
         build_agent(sample_config, sample_resume, "local", "")
 
