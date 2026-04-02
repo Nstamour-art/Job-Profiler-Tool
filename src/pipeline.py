@@ -241,7 +241,7 @@ def _log_to_sheet(config: dict, job_data: dict, job_details: "JobDetails", resul
         resume_json = results.resume_json
         priority = str(resume_json.priority) if resume_json is not None else ""
         reasoning = resume_json.priority_reasoning if resume_json is not None else ""
-        details = (job_data.get("description") or "")[:500]
+        details = job_data.get("description") or ""
         job_row = JobRow(
             title=job_details.title or job_data.get("job_title", ""),
             company=job_details.company or job_data.get("company", ""),
