@@ -1,6 +1,6 @@
 <div align="center">
 
-# ◆ Job Profiler Tool
+# ◆ Job Profiler
 
 **AI-powered job search agent with a rich terminal UI**
 
@@ -75,16 +75,16 @@
 
 ```
 ╭───────────────────────────────── ◆  Job Profiler ─────────────────────────────────╮
-│                                                                                    │
-│  Hello, Jane!                                                                      │
-│                                                                                    │
-│  I'm your job search assistant. Tell me what kind of roles you're                  │
-│  looking for — location, seniority, company, or anything else — and                │
-│  I'll search, tailor your resume, and generate a cover letter for each match.      │
-│                                                                                    │
-│  Type exit to quit at any time.                                                    │
-│                                                                                    │
-╰────────────────────────────────────────────────────────────────────────────────────╯
+│                                                                                   │
+│  Hello, Jane!                                                                     │
+│                                                                                   │
+│  I'm your job search assistant. Tell me what kind of roles you're                 │
+│  looking for — location, seniority, company, or anything else — and               │
+│  I'll search, tailor your resume, and generate a cover letter for each match.     │
+│                                                                                   │
+│  Type exit to quit at any time.                                                   │
+│                                                                                   │
+╰───────────────────────────────────────────────────────────────────────────────────╯
 
 You › Find me backend engineering roles in Toronto
 ⠋ Thinking…
@@ -337,13 +337,13 @@ When `resume.yaml` doesn't exist, the tool automatically runs a guided interview
 
 ```
 ╭─────────────────────────── Resume Onboarding ───────────────────────────╮
-│                                                                          │
-│  Let's start with your basic info. What's your name, email, phone,       │
-│  location, and any LinkedIn or GitHub profiles?                          │
-│                                                                          │
-│  You can type it out or paste from your profile.                         │
-│                                                                          │
-╰──────────────────────────────────────────────────────────────────────────╯
+│                                                                         │
+│  Let's start with your basic info. What's your name, email, phone,      │
+│  location, and any LinkedIn or GitHub profiles?                         │
+│                                                                         │
+│  You can type it out or paste from your profile.                        │
+│                                                                         │
+╰─────────────────────────────────────────────────────────────────────────╯
 
 You › Jane Doe, jane@example.com, Toronto ON, github.com/janedoe
 ⠋ Parsing your input…
