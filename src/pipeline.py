@@ -234,11 +234,16 @@ def _log_to_sheet(config: dict, job_data: dict, job_details: "JobDetails", resul
     Never raises — sheet failure must not abort document generation.
     """
     from src.models import JobRow  # pylint: disable=import-outside-toplevel
+
+    # If Google Sheets is not configured, treat logging as a no-op and succeed quietly.
+    sheets_cfg = (config or {}).get("google_sheets") if isinstance(config, dict) else None
+    if not sheets_cfg:
+        return Outcome(success=True, message="Sheets logging skipped: not configured.")
     try:
         resume_json = results.resume_json
         priority = str(resume_json.priority) if resume_json is not None else ""
         reasoning = resume_json.priority_reasoning if resume_json is not None else ""
-        details = (job_data.get("description") or "")[:500]
+        details = job_data.get("description") or ""
         job_row = JobRow(
             title=job_details.title or job_data.get("job_title", ""),
             company=job_details.company or job_data.get("company", ""),

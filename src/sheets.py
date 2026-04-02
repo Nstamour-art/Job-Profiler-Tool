@@ -100,11 +100,13 @@ def append_job_row(
     # Check for an existing row with the same URL and update it instead of duplicating.
     url_col_name = cols.get("url", "")
     existing_row_index: int | None = None
-    if url_col_name and url_col_name in headers:
+    # Only attempt URL-based matching when the job's URL is non-empty after stripping.
+    normalized_url = (job_row.url or "").strip()
+    if normalized_url and url_col_name and url_col_name in headers:
         url_col_index = headers.index(url_col_name) + 1  # 1-based
         url_values = sheet.col_values(url_col_index)
         for i, cell_value in enumerate(url_values[1:], start=2):  # skip header row
-            if cell_value == job_row.url:
+            if (cell_value or "").strip() == normalized_url:
                 existing_row_index = i
                 break
 

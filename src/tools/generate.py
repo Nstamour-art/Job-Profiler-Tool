@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from langchain_core.tools import tool as lc_tool
 
-from src.models import Outcome
 from src.pipeline import process_job
 from src.providers import BaseProvider
 
