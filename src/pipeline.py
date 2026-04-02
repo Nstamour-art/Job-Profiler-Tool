@@ -92,7 +92,7 @@ def _generate_llm_content(
     from src.models import PipelineResults  # pylint: disable=import-outside-toplevel
     resume_json = None
     if not ctx.options.cover_only:
-        ui.print_step("Generating tailored resume \u2026")
+        ui.print_step(f"Generating resume for {job_details.title} at {job_details.company} \u2026")
         resume_json = generate_resume(
             job_details, ctx.resume, ctx.config, ctx.provider_suite.provider, ctx.provider_suite.models
         )
@@ -100,11 +100,11 @@ def _generate_llm_content(
     cover_json = None
     if not ctx.options.resume_only:
         if resume_json is None:
-            ui.print_step("Generating resume context for cover letter \u2026")
+            ui.print_step(f"Generating resume context for {job_details.title} at {job_details.company} \u2026")
             resume_json = generate_resume(
                 job_details, ctx.resume, ctx.config, ctx.provider_suite.provider, ctx.provider_suite.models
             )
-        ui.print_step("Generating cover letter \u2026")
+        ui.print_step(f"Generating cover letter for {job_details.title} at {job_details.company} \u2026")
         cover_json = generate_cover_letter(
             job_details, ctx.resume, resume_json, ctx.config,
             ctx.provider_suite.provider, ctx.provider_suite.models
@@ -126,7 +126,7 @@ def _save_documents(
 
     if not ctx.options.cover_only and results.resume_json is not None:
         resume_path = str(_unique_path(folder / f"{candidate_name} - {safe_name} - Resume.docx"))
-        ui.print_step("Building resume.docx \u2026")
+        ui.print_step(f"Building resume for {title} at {company} \u2026")
         build_resume(
             resume_json=results.resume_json,
             personal=ctx.resume["basics"],
@@ -139,7 +139,7 @@ def _save_documents(
         cover_path = str(
             _unique_path(folder / f"{candidate_name} - {safe_name} - Cover Letter.docx")
         )
-        ui.print_step("Building cover_letter.docx \u2026")
+        ui.print_step(f"Building cover letter for {title} at {company} \u2026")
         build_cover_letter(
             cover_json=results.cover_json,
             personal=ctx.resume["basics"],
@@ -198,8 +198,10 @@ def process_job(
     job_data = _get_job_data(job, url)
     if options.debug_run_id is not None:
         log_scraped(options.debug_run_id, job_data.get("description", ""))
-
-    ui.print_step("Parsing job description \u2026")
+    step_message = "Parsing job description for {} at {} \u2026".format(
+        job_data.get("title", "Unknown"), job_data.get("company", "Unknown")
+    ) if job_data.get("description") else "Parsing job description \u2026"
+    ui.print_step(step_message)
     job_details = parse_job_description(
         job_data, config, provider_suite.provider, provider_suite.parser_models
     )

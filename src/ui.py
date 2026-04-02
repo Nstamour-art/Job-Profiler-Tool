@@ -7,6 +7,8 @@ contexts and panel rendering are always coherent.
 
 from __future__ import annotations
 
+import random
+import threading
 from contextlib import contextmanager
 from typing import Generator
 
@@ -49,12 +51,21 @@ def print_banner() -> None:
 def print_greeting(name: str) -> None:
     """Print a welcome panel addressed to the candidate before the chat loop."""
     body = Text()
-    body.append(f"Hello, {name}!\n\n", style="bold white")
+    body.append(f"Hello, {name.split()[0]}!\n\n", style="bold white")
     body.append(
         "I'm your job search assistant. Tell me what kind of roles you're\n"
         "looking for — location, seniority, company, or anything else — and\n"
         "I'll search, tailor your resume, and generate a cover letter for each match.\n\n"
+        "Here are some things you can try:\n"
+        " - Search for jobs:"
     )
+    body.append(" - Find me remote product manager roles in my city\n", style="yellow")
+    body.append(" - Tailor your resume: ", style="white")
+    body.append("Make my resume highlight my project management skills\n", style="yellow")
+    body.append(" - Generate a cover letter: ", style="white")
+    body.append("Create a cover letter for this role at www.example.com/job123\n", style="yellow")
+    body.append(" \u2026 and much more! Just ask.\n\n", style="white")
+
     body.append("Type ", style="dim")
     body.append("exit", style="bold yellow")
     body.append(" to quit at any time.", style="dim")
@@ -98,11 +109,248 @@ def user_prompt_text() -> str:
 # Spinner
 # ---------------------------------------------------------------------------
 
+_THINKING_PHRASES: list[str] = [
+    "Accomplishing…",
+    "Actioning…",
+    "Actualizing…",
+    "Aligning vectors…",
+    "Architecting…",
+    "Baking…",
+    "Beaming…",
+    "Beaming it up…",
+    "Beboppin'…",
+    "Becoming immune to iocaine powder…",
+    "Befuddling…",
+    "Billowing…",
+    "Blanching…",
+    "Bloviating…",
+    "Boldly going…",
+    "Boogieing…",
+    "Boondoggling…",
+    "Booping…",
+    "Bootstrapping…",
+    "Brewing…",
+    "Burrowing…",
+    "Calculating…",
+    "Canoodling…",
+    "Caramelizing…",
+    "Cascading…",
+    "Catapulting…",
+    "Cerebrating…",
+    "Channeling…",
+    "Channelling…",
+    "Choreographing…",
+    "Churning…",
+    "Circling back…",
+    "Coalescing…",
+    "Cogitating…",
+    "Combobulating…",
+    "Composing…",
+    "Computing…",
+    "Concocting…",
+    "Conjuring…",
+    "Connecting the dots…",
+    "Considering…",
+    "Consulting the archives…",
+    "Consulting the oracle…",
+    "Contemplating…",
+    "Cooking…",
+    "Crafting…",
+    "Creating…",
+    "Crunching…",
+    "Crunching the numbers…",
+    "Crystallizing…",
+    "Cultivating…",
+    "Deciphering…",
+    "Deliberating…",
+    "Determining…",
+    "Dilly-dallying…",
+    "Discombobulating…",
+    "Doing…",
+    "Doodling…",
+    "Drizzling…",
+    "Ebbing…",
+    "Effecting…",
+    "Elucidating…",
+    "Embellishing…",
+    "Enchanting…",
+    "Envisioning…",
+    "Evaporating…",
+    "Extracting insights…",
+    "Fermenting…",
+    "Fiddle-faddling…",
+    "Finagling…",
+    "Flambeing…",
+    "Flibbertigibbeting…",
+    "Flowing…",
+    "Flummoxing…",
+    "Fluttering…",
+    "Forging…",
+    "Forming…",
+    "Frolicking…",
+    "Frosting…",
+    "Gallivanting…",
+    "Galloping…",
+    "Garnishing…",
+    "Gathering data…",
+    "Generating…",
+    "Germinating…",
+    "Gitifying…",
+    "Grooving…",
+    "Gusting…",
+    "Harmonizing…",
+    "Hashing…",
+    "Hatching…",
+    "Hatching a plan…",
+    "Herding…",
+    "Hitting the books…",
+    "Honking…",
+    "Hullaballooing…",
+    "Hyperspacing…",
+    "Hypothesizing…",
+    "Ideating…",
+    "Imagining…",
+    "Improvising…",
+    "In the zone…",
+    "Incubating…",
+    "Inferring…",
+    "Infusing…",
+    "Ionizing…",
+    "Jitterbugging…",
+    "Julienning…",
+    "Kneading…",
+    "Leavening…",
+    "Levitating…",
+    "Lollygagging…",
+    "Making it so…",
+    "Manifesting…",
+    "Marinating…",
+    "Mastering the force…",
+    "Meandering…",
+    "Metamorphosing…",
+    "Misting…",
+    "Moonwalking…",
+    "Moseying…",
+    "Mulling…",
+    "Musing…",
+    "Mustering…",
+    "Nebulizing…",
+    "Nesting…",
+    "Newspapering…",
+    "Noodling…",
+    "Nucleating…",
+    "On it…",
+    "Optimizing…",
+    "Orbiting…",
+    "Orchestrating…",
+    "Osmosing…",
+    "Perambulating…",
+    "Percolating…",
+    "Perusing…",
+    "Philosophising…",
+    "Photosynthesizing…",
+    "Pollinating…",
+    "Pondering…",
+    "Pontificating…",
+    "Pouncing…",
+    "Precipitating…",
+    "Prestidigitating…",
+    "Processing…",
+    "Proofing…",
+    "Propagating…",
+    "Puttering…",
+    "Puzzling…",
+    "Quantumizing…",
+    "Razzle-dazzling…",
+    "Razzmatazzing…",
+    "Recombobulating…",
+    "Reticulating…",
+    "Reticulating splines…",
+    "Roosting…",
+    "Ruminating…",
+    "Running the analysis…",
+    "Sauteing…",
+    "Sautéing…",
+    "Scampering…",
+    "Schlepping…",
+    "Scurrying…",
+    "Seasoning…",
+    "Shenaniganing…",
+    "Shimmying…",
+    "Simmering…",
+    "Skedaddling…",
+    "Sketching…",
+    "Slithering…",
+    "Smooshing…",
+    "Sock-hopping…",
+    "Spelunking…",
+    "Spicing things up…",
+    "Spinning…",
+    "Sprouting…",
+    "Stewing…",
+    "Sublimating…",
+    "Summoning…",
+    "Swirling…",
+    "Swooping…",
+    "Symbioting…",
+    "Synthesizing…",
+    "Tempering…",
+    "Thinking…",
+    "Thundering…",
+    "Tinkering…",
+    "Tomfoolering…",
+    "Topsy-turvying…",
+    "Transfiguring…",
+    "Transmuting…",
+    "Tuning the algorithm…",
+    "Twisting…",
+    "Undulating…",
+    "Unfurling…",
+    "Unravelling…",
+    "Vibing…",
+    "Waddling…",
+    "Wandering…",
+    "Warping…",
+    "Warming up the Flux Capacitor…",
+    "Whatchamacalliting…",
+    "Whirlpooling…",
+    "Whirring…",
+    "Whisking…",
+    "Wibbling…",
+    "Working…",
+    "Wrangling…",
+    "Zesting…",
+    "Zigzagging…",
+]
+
+
 @contextmanager
-def thinking_spinner(message: str = "Thinking\u2026") -> Generator[None, None, None]:
-    """Context manager that shows an animated dots spinner while work runs."""
-    with console.status(f"[cyan]{message}[/cyan]", spinner="dots"):
-        yield
+def thinking_spinner(message: str = "Thinking…") -> Generator[None, None, None]:
+    """Context manager that shows an animated spinner while work runs.
+
+    When called with no message (the default), cycles through witty phrases
+    every 3-6 seconds à la Claude Code. Custom messages are shown statically.
+    """
+    if message != "Thinking…":
+        with console.status(f"[cyan]{message}[/cyan]", spinner="dots"):
+            yield
+        return
+
+    stop_event = threading.Event()
+
+    with console.status(f"[cyan]{random.choice(_THINKING_PHRASES)}[/cyan]", spinner="dots") as status:
+        def _rotate() -> None:
+            number = float(random.randint(3, 6))
+            while not stop_event.wait(number):
+                status.update(f"[cyan]{random.choice(_THINKING_PHRASES)}[/cyan]")
+
+        thread = threading.Thread(target=_rotate, daemon=True)
+        thread.start()
+        try:
+            yield
+        finally:
+            stop_event.set()
+            thread.join(timeout=1.0)
 
 
 # ---------------------------------------------------------------------------

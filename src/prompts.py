@@ -161,7 +161,16 @@ WORKFLOW:
        wait for the candidate to pick one title, then proceed to step 2.
 2. Ask for location/remote preference.
 3. Ask for salary range.
-4. Call search_jobs with a preferences summary, then log each found job to the sheet.
+4. Call search_jobs with a structured preferences summary that includes the candidate's
+   inferred seniority level. Format:
+     Roles: <title1>, <title2>
+     Seniority: <level> (e.g. Junior (1-2 years), Mid-level (3-5 years), Senior (6+ years))
+     Location: <location or Remote>
+     Salary: <range>
+     Key skills: <comma-separated top skills>
+   If suggest_roles was called, use the seniority_level it returned. Otherwise infer
+   seniority from the candidate's resume context (years of experience, most recent title).
+   Then log each found job to the sheet.
 5. Present the results as a numbered list. Ask which jobs to generate documents for.
 6. Call generate_documents for each confirmed job.
 7. If the candidate asks to change their template, call change_template immediately.
@@ -171,6 +180,7 @@ RULES:
 - Never generate documents without explicit job selection from the candidate.
 - Never write to the resume without showing the change and getting explicit confirmation.
 - Keep your context lean: present job summaries (title, company, salary), not full descriptions.
+- Focus on priority jobs that are a strong match to the candidate's background and preferences. Avoid suggesting roles that are a poor fit.
 - If the candidate says "exit", "quit", or "bye", wrap up and say goodbye.
 """
 
@@ -180,15 +190,25 @@ the candidate's preferences using the Tavily search tool.
 
 INSTRUCTIONS:
 1. The preferences summary may contain a single role title OR multiple role titles
-   (listed under "Roles:"). When multiple roles are provided, make searches for
-   EACH role title and combine the results.
-2. Make 3-5 targeted Tavily searches using varied queries derived from the preferences.
-   - Include the job title, location/remote, and seniority in each query.
-   - Try variations: "site:linkedin.com/jobs", "site:greenhouse.io", general queries.
-3. Prioritize results with salary information and those from reputable companies. If the same job is found on multiple sites, keep the one with the most complete information.
-4. Deduplicate results — remove listings with the same company and title.
-5. Filter for relevance: only keep listings that match a target role and location.
-6. Return EXACTLY the following JSON and nothing else — no markdown, no explanation:
+    (listed under "Roles:"). When multiple roles are provided, make searches for
+    EACH role title and combine the results.
+2. If a "Seniority:" field is present in the preferences, use it to constrain searches:
+    - Match the seniority level in your search queries (e.g. prefer "software engineer"
+      over "senior software engineer" for a mid-level candidate).
+    - EXCLUDE listings whose title is clearly more than one level above or below:
+      e.g. for Mid-level, exclude Staff, Principal, Director, VP, Head-of, C-level,
+      Junior, Associate, and Intern titles.
+    - When in doubt, prefer to include rather than exclude.
+3. Make 3-5 targeted Tavily searches using varied queries derived from the preferences.
+    - Include the job title, location/remote, and seniority in each query.
+    - Try variations: "site:linkedin.com/jobs", "site:greenhouse.io", general queries.
+4. Prioritize results with salary information and those from reputable companies.
+    If the same job is found on multiple sites, keep the one with the most complete information.
+5. Deduplicate results — remove listings with the same company and title.
+6. Filter for relevance: only keep listings that match a target role and location.
+7. Prioritize recent active listings over old or potentially expired ones.
+8. Do not fabricate or infer any information about the jobs. Only use what is explicitly stated in the search results.
+9. Return EXACTLY the following JSON and nothing else — no markdown, no explanation:
 
 {{"jobs": [
   {{
@@ -208,17 +228,29 @@ SUGGEST_ROLES_PROMPT = """\
 You are a career advisor. Based on the candidate's resume, suggest 5-7 realistic
 job titles they are qualified to apply for right now.
 
+FIRST, infer the candidate's seniority level from their total years of professional
+experience and the scope of their most recent roles:
+- 0-2 years -> Entry-level / Junior
+- 2-5 years -> Mid-level
+- 5-9 years -> Senior
+- 9+ years with leadership scope -> Staff / Lead / Principal
+
+Return this as "seniority_level" in the JSON (e.g. "Mid-level", "Senior").
+
 RULES:
 - Derive titles only from actual skills, experience, and education present in the resume.
 - Use realistic, searchable job titles (e.g. "Senior UX Designer", "Data Analyst",
-  "Product Manager") — not vague titles like "Creative Technologist".
-- Vary seniority based on years of experience shown in the resume.
+  "Product Manager") — not vague titles like "Technologist".
+- Titles must match the inferred seniority level. Do NOT suggest titles one full level
+  above the candidate's experience (e.g. do not suggest Staff or Principal for a mid-level
+  candidate). A stretch of one level is acceptable only if the resume clearly supports it.
 - For each title, write one concise sentence of reasoning that cites something
   specific from the resume (a skill, tool, or experience).
 - Do NOT fabricate skills, companies, or experience not present in the resume.
+- Avoid elevated or aspirational titles that don't match the candidate's background.
 
 You MUST respond with valid JSON only — no markdown, no explanation:
-{"roles": [{"title": "...", "reasoning": "..."}]}
+{"seniority_level": "...", "roles": [{"title": "...", "reasoning": "..."}]}
 """
 
 GENERATION_SUBAGENT_SYSTEM_PROMPT = """\

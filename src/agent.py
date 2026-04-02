@@ -154,7 +154,7 @@ def run_agent_chat(config: dict, provider_name: str) -> None:
                 user_input = input(ui.user_prompt_text()).strip()
             except (EOFError, KeyboardInterrupt):
                 ui.print_newline()
-                ui.print_agent_message("Goodbye!")
+                ui.print_agent_message("Goodbye! Good luck with your search.")
                 break
 
             if user_input.lower() in ("exit", "quit", "bye"):

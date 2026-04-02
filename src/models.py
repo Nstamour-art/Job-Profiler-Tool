@@ -84,6 +84,7 @@ class SuggestedRole(BaseModel):
 
 class SuggestedRoles(BaseModel):
     """A list of job title suggestions for the candidate."""
+    seniority_level: str   # e.g. "Mid-level", "Senior", "Entry-level" — inferred from resume
     roles: list[SuggestedRole]
 
 
