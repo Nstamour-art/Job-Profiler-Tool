@@ -13,6 +13,7 @@ from unittest.mock import patch, MagicMock
 def test_suggested_roles_model_valid():
     from src.models import SuggestedRoles
     data = {
+        "seniority_level": "Mid-level",
         "roles": [
             {"title": "UX Designer", "reasoning": "3 years Figma experience"},
             {"title": "Product Designer", "reasoning": "interaction design background"},
@@ -22,17 +23,18 @@ def test_suggested_roles_model_valid():
     assert len(result.roles) == 2
     assert result.roles[0].title == "UX Designer"
     assert result.roles[0].reasoning == "3 years Figma experience"
+    assert result.seniority_level == "Mid-level"
 
 
 def test_suggested_roles_model_rejects_missing_title():
     from src.models import SuggestedRoles
     with pytest.raises(ValidationError):
-        SuggestedRoles.model_validate({"roles": [{"reasoning": "no title here"}]})
+        SuggestedRoles.model_validate({"seniority_level": "Mid-level", "roles": [{"reasoning": "no title here"}]})
 
 
 def test_suggested_roles_model_empty_roles_list():
     from src.models import SuggestedRoles
-    result = SuggestedRoles.model_validate({"roles": []})
+    result = SuggestedRoles.model_validate({"seniority_level": "Entry-level", "roles": []})
     assert result.roles == []
 
 
@@ -69,10 +71,13 @@ def test_suggest_roles_returns_formatted_string(tmp_path):
         "paths": {"resume_yaml": str(resume_path)},
         "llm": {"temperature": 0.3, "max_retries": 3, "model": "m", "parser_model": "m"},
     }
-    mock_result = SuggestedRoles(roles=[
-        SuggestedRole(title="UX Designer", reasoning="3 years Figma experience"),
-        SuggestedRole(title="Product Designer", reasoning="interaction design background"),
-    ])
+    mock_result = SuggestedRoles(
+        seniority_level="Mid-level",
+        roles=[
+            SuggestedRole(title="UX Designer", reasoning="3 years Figma experience"),
+            SuggestedRole(title="Product Designer", reasoning="interaction design background"),
+        ]
+    )
 
     with patch("src.tools.suggest_roles._call_with_retry", return_value=mock_result):
         from src.tools.suggest_roles import create_suggest_roles_tool
@@ -82,6 +87,7 @@ def test_suggest_roles_returns_formatted_string(tmp_path):
     assert "1. UX Designer" in result
     assert "3 years Figma experience" in result
     assert "2. Product Designer" in result
+    assert "Mid-level" in result
 
 
 def test_suggest_roles_handles_llm_error(tmp_path):
@@ -129,7 +135,6 @@ def test_build_agent_includes_suggest_roles_tool():
          patch("src.agent.create_search_tool", return_value=MagicMock(name="search_jobs")), \
          patch("src.agent.create_generate_tool", return_value=MagicMock(name="generate_documents")), \
          patch("src.agent.create_resume_tools", return_value=(MagicMock(), MagicMock())), \
-         patch("src.agent.create_sheet_log_tool", return_value=MagicMock()), \
          patch("src.agent.create_suggest_roles_tool", return_value=MagicMock(name="suggest_roles")) as mock_suggest, \
          patch.dict(os.environ, {"TAVILY_API_KEY": "test"}):
         from src.agent import build_agent

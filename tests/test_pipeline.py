@@ -28,7 +28,7 @@ def test_process_job_uses_cached_description(sample_config, sample_resume, tmp_p
          patch("src.pipeline.build_cover_letter"):
         from src.pipeline import process_job
         ps = ProviderSuite(provider=MagicMock(), models=["m"], parser_models=["m"], name="local")
-        _, job_data, resume_json = process_job(job, sample_config, sample_resume, ps)
+        _, job_data, resume_json, _ = process_job(job, sample_config, sample_resume, ps)
 
     assert not job_data["_scraped_fresh"]
     assert resume_json.priority == 3

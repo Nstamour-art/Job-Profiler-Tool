@@ -386,7 +386,7 @@ google_sheets:
   spreadsheet_id: "your_spreadsheet_id_here"
   worksheet_name: "Sheet1"
   columns:
-    job_title: "Job Title"
+    job_title: "Title"
     company: "Company"
     url: "URL"
     status: "Status"

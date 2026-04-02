@@ -28,7 +28,6 @@ from src.template_agent import run_template_wizard
 from src.tools.search import create_search_tool
 from src.tools.generate import create_generate_tool
 from src.tools.resume_editor import create_resume_tools
-from src.tools.sheet_log import create_sheet_log_tool
 from src.tools.suggest_roles import create_suggest_roles_tool
 
 
@@ -87,7 +86,6 @@ def _init_tools(
         create_search_tool(agent_model, tavily_api_key, max_jobs, parser_model=parser_model),
         create_generate_tool(config, resume, provider, models, parser_models),
         *create_resume_tools(config["paths"]["resume_yaml"]),
-        create_sheet_log_tool(config),
         _create_change_template_tool(config, provider_name),
         create_suggest_roles_tool(config, provider, parser_models)
     ]
@@ -156,7 +154,7 @@ def run_agent_chat(config: dict, provider_name: str) -> None:
                 user_input = input(ui.user_prompt_text()).strip()
             except (EOFError, KeyboardInterrupt):
                 ui.print_newline()
-                ui.print_agent_message("Goodbye!")
+                ui.print_agent_message("Goodbye! Good luck with your search.")
                 break
 
             if user_input.lower() in ("exit", "quit", "bye"):

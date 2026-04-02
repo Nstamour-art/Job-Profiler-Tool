@@ -16,6 +16,7 @@ import click
 import yaml
 from pathlib import Path
 from dotenv import load_dotenv
+from src.scraper import ScraperError
 from src.template_agent import run_template_wizard
 from src.models import JobOptions, ProviderSuite
 from src.debug import log_run
@@ -176,15 +177,20 @@ def _run_direct_url_mode(
 
     job = {"url": direct_url, "job_title": "", "status": "", "details": "", "row": None}
     ui.print_step(f"Processing: {direct_url}")
-    folder, _, resume_json = process_job(
-        job, config, load_resume(config["paths"]["resume_yaml"]),
-        provider_suite=ps,
-        options=options
-    )
+    try:
+        folder, _, resume_json, sheet_outcome = process_job(
+            job, config, load_resume(config["paths"]["resume_yaml"]),
+            provider_suite=ps,
+            options=options
+        )
+    except ScraperError as e:
+        raise click.ClickException(str(e)) from e
     if resume_json is not None:
         ui.print_step(
-            f"Priority: {resume_json.priority}/10 \u2014 {resume_json.priority_reasoning}"
+            f"Priority: {resume_json.priority}/10 — {resume_json.priority_reasoning}"
         )
+    if not sheet_outcome.success:
+        ui.print_error(sheet_outcome.message)
     ui.print_success(f"Saved to: {folder}")
 
 

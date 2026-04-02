@@ -1,5 +1,20 @@
+from dataclasses import dataclass
 from typing import Any
 from pydantic import BaseModel
+
+
+@dataclass
+class Outcome:
+    """Result of a tool or pipeline operation reported back to the agent.
+
+    success: True if the operation completed without error.
+    message: Human-readable summary — shown to the agent (and therefore the user) as-is.
+    """
+    success: bool
+    message: str
+
+    def __str__(self) -> str:
+        return self.message
 
 
 class JobDetails(BaseModel):
@@ -69,6 +84,7 @@ class SuggestedRole(BaseModel):
 
 class SuggestedRoles(BaseModel):
     """A list of job title suggestions for the candidate."""
+    seniority_level: str   # e.g. "Mid-level", "Senior", "Entry-level" — inferred from resume
     roles: list[SuggestedRole]
 
 
@@ -109,5 +125,6 @@ class JobRow(BaseModel):
     url: str
     status: str
     date_found: str
+    details: str = ""
     priority: str = ""
     reasoning: str = ""

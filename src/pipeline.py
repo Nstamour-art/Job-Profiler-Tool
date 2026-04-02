@@ -9,8 +9,6 @@ import re
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
-
-import click
 import yaml as _yaml
 
 from src import ui
@@ -19,6 +17,8 @@ from src.llm import parse_job_description, generate_resume, generate_cover_lette
 from src.document import build_resume, build_cover_letter
 from src.debug import log_scraped, log_job_details, log_resume, log_cover_letter, log_output_folder
 from src.themes import ThemeConfig, CLASSIC, PRESETS, merge_overrides, TemplateOverrides
+from src.sheets import append_job_row
+from src.models import Outcome
 
 if TYPE_CHECKING:
     from src.models import ResumeJSON, JobDetails, JobOptions, PipelineContext, PipelineResults, ProviderSuite
@@ -76,7 +76,7 @@ def _get_job_data(job: dict, url: str) -> dict:
         try:
             scraped = scrape_job(url)
         except ScraperError as e:
-            raise click.ClickException(str(e)) from e
+            raise ScraperError(str(e)) from e
         job_data = {**job, **scraped}
         scraped_fresh = True
 
@@ -92,7 +92,7 @@ def _generate_llm_content(
     from src.models import PipelineResults  # pylint: disable=import-outside-toplevel
     resume_json = None
     if not ctx.options.cover_only:
-        ui.print_step("Generating tailored resume \u2026")
+        ui.print_step(f"Generating resume for {job_details.title} at {job_details.company} \u2026")
         resume_json = generate_resume(
             job_details, ctx.resume, ctx.config, ctx.provider_suite.provider, ctx.provider_suite.models
         )
@@ -100,11 +100,11 @@ def _generate_llm_content(
     cover_json = None
     if not ctx.options.resume_only:
         if resume_json is None:
-            ui.print_step("Generating resume context for cover letter \u2026")
+            ui.print_step(f"Generating resume context for {job_details.title} at {job_details.company} \u2026")
             resume_json = generate_resume(
                 job_details, ctx.resume, ctx.config, ctx.provider_suite.provider, ctx.provider_suite.models
             )
-        ui.print_step("Generating cover letter \u2026")
+        ui.print_step(f"Generating cover letter for {job_details.title} at {job_details.company} \u2026")
         cover_json = generate_cover_letter(
             job_details, ctx.resume, resume_json, ctx.config,
             ctx.provider_suite.provider, ctx.provider_suite.models
@@ -126,7 +126,7 @@ def _save_documents(
 
     if not ctx.options.cover_only and results.resume_json is not None:
         resume_path = str(_unique_path(folder / f"{candidate_name} - {safe_name} - Resume.docx"))
-        ui.print_step("Building resume.docx \u2026")
+        ui.print_step(f"Building resume for {title} at {company} \u2026")
         build_resume(
             resume_json=results.resume_json,
             personal=ctx.resume["basics"],
@@ -139,7 +139,7 @@ def _save_documents(
         cover_path = str(
             _unique_path(folder / f"{candidate_name} - {safe_name} - Cover Letter.docx")
         )
-        ui.print_step("Building cover_letter.docx \u2026")
+        ui.print_step(f"Building cover letter for {title} at {company} \u2026")
         build_cover_letter(
             cover_json=results.cover_json,
             personal=ctx.resume["basics"],
@@ -176,15 +176,15 @@ def process_job(
     resume: dict,
     provider_suite: "ProviderSuite",
     options: "JobOptions | None" = None,
-) -> tuple[str, dict, "ResumeJSON | None"]:
+) -> tuple[str, dict, "ResumeJSON | None", "Outcome"]:
     """
     Full pipeline for one job:
       scrape (or use cached details) → parse → LLM resume → LLM cover letter → write docx
-    Returns (output_directory_path, job_data, resume_json).
+    Returns (output_directory_path, job_data, resume_json, sheet_outcome).
     """
     from src.models import PipelineContext, JobOptions  # pylint: disable=import-outside-toplevel
     options = options or JobOptions()
-    ctx = PipelineContext(
+    context = PipelineContext(
         config=config,
         resume=resume,
         provider_suite=provider_suite,
@@ -198,15 +198,17 @@ def process_job(
     job_data = _get_job_data(job, url)
     if options.debug_run_id is not None:
         log_scraped(options.debug_run_id, job_data.get("description", ""))
-
-    ui.print_step("Parsing job description \u2026")
+    step_message = "Parsing job description for {} at {} \u2026".format(
+        job_data.get("title", "Unknown"), job_data.get("company", "Unknown")
+    ) if job_data.get("description") else "Parsing job description \u2026"
+    ui.print_step(step_message)
     job_details = parse_job_description(
         job_data, config, provider_suite.provider, provider_suite.parser_models
     )
     if options.debug_run_id is not None:
         log_job_details(options.debug_run_id, job_details)
 
-    results = _generate_llm_content(ctx, job_details)
+    results = _generate_llm_content(context, job_details)
     if options.debug_run_id is not None:
         if results.resume_json is not None:
             log_resume(options.debug_run_id, results.resume_json)
@@ -218,6 +220,41 @@ def process_job(
     if options.debug_run_id is not None:
         log_output_folder(options.debug_run_id, str(folder))
 
-    _save_documents(ctx, folder, theme, results)
+    _save_documents(context, folder, theme, results)
 
-    return str(folder), job_data, results.resume_json
+    sheet_warning = _log_to_sheet(config, job_data, job_details, results)
+
+    return str(folder), job_data, results.resume_json, sheet_warning
+
+
+def _log_to_sheet(config: dict, job_data: dict, job_details: "JobDetails", results: "PipelineResults") -> "Outcome":
+    """Append a row to Google Sheets after successful document generation.
+
+    Returns Outcome(success=True, ...) on success or Outcome(success=False, ...) on failure.
+    Never raises — sheet failure must not abort document generation.
+    """
+    from src.models import JobRow  # pylint: disable=import-outside-toplevel
+
+    # If Google Sheets is not configured, treat logging as a no-op and succeed quietly.
+    sheets_cfg = (config or {}).get("google_sheets") if isinstance(config, dict) else None
+    if not sheets_cfg:
+        return Outcome(success=True, message="Sheets logging skipped: not configured.")
+    try:
+        resume_json = results.resume_json
+        priority = str(resume_json.priority) if resume_json is not None else ""
+        reasoning = resume_json.priority_reasoning if resume_json is not None else ""
+        details = job_data.get("description") or ""
+        job_row = JobRow(
+            title=job_details.title or job_data.get("job_title", ""),
+            company=job_details.company or job_data.get("company", ""),
+            url=job_data.get("url", ""),
+            status="Generated",
+            date_found=date.today().isoformat(),
+            details=details,
+            priority=priority,
+            reasoning=reasoning,
+        )
+        append_job_row(config=config, job_row=job_row)
+        return Outcome(success=True, message="Job logged to Google Sheets.")
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        return Outcome(success=False, message=f"Sheet logging failed: {exc}")

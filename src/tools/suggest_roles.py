@@ -40,7 +40,8 @@ def create_suggest_roles_tool(config: dict, provider, parser_models: list[str]):
                 f"{i + 1}. {role.title} — {role.reasoning}"
                 for i, role in enumerate(result.roles)
             ]
-            return "\n".join(lines)
+            header = f"Inferred seniority: {result.seniority_level}\n"
+            return header + "\n".join(lines)
         except Exception as exc:  # pylint: disable=broad-exception-caught
             return f"Failed to suggest roles: {exc}"
 
