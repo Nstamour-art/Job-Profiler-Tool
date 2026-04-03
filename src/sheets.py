@@ -72,14 +72,53 @@ def update_status(config: dict, row: int, status: str) -> None:
     update_row(config, row, status=status)
 
 
-def append_job_row(
+def _find_existing_row(
+    sheet,
+    headers: list[str],
+    cols: dict,
+    job_row: "JobRow",
+) -> int | None:
+    """Return the 1-based row index of the first matching row, or None.
+
+    Matches on: URL OR (company AND title both match).
+    Reads all values in a single API call to minimise round-trips.
+    """
+    url_col = cols.get("url", "")
+    title_col = cols.get("job_title", "")
+    company_col = cols.get("company", "")
+
+    norm_url = (job_row.url or "").strip().lower()
+    norm_title = (job_row.title or "").strip().lower()
+    norm_company = (job_row.company or "").strip().lower()
+
+    all_values = sheet.get_all_values()
+    if len(all_values) < 2:
+        return None
+
+    for row_idx, row in enumerate(all_values[1:], start=2):
+        def _cell(col_name: str) -> str:
+            if col_name not in headers:
+                return ""
+            idx = headers.index(col_name)
+            return (row[idx] if idx < len(row) else "").strip().lower()
+
+        if norm_url and _cell(url_col) == norm_url:
+            return row_idx
+        if norm_title and norm_company and _cell(title_col) == norm_title and _cell(company_col) == norm_company:
+            return row_idx
+
+    return None
+
+
+def upsert_job_row(
     config: dict,
     job_row: "JobRow",
 ) -> None:
-    """Append a new job row to the sheet.
+    """Insert or update a job row in the sheet.
 
-    Aligns values to the sheet's header row.
-    If a row with a matching URL already exists, updates it in-place instead of appending.
+    Match strategy: URL matches OR (company + title both match).
+    If a match is found, all columns are updated in-place.
+    If no match, a new row is appended.
     Skips any column not present in the sheet.
     """
     sheet = _open_sheet(config)
@@ -97,18 +136,7 @@ def append_job_row(
         "reasoning": job_row.reasoning,
     }
 
-    # Check for an existing row with the same URL and update it instead of duplicating.
-    url_col_name = cols.get("url", "")
-    existing_row_index: int | None = None
-    # Only attempt URL-based matching when the job's URL is non-empty after stripping.
-    normalized_url = (job_row.url or "").strip()
-    if normalized_url and url_col_name and url_col_name in headers:
-        url_col_index = headers.index(url_col_name) + 1  # 1-based
-        url_values = sheet.col_values(url_col_index)
-        for i, cell_value in enumerate(url_values[1:], start=2):  # skip header row
-            if (cell_value or "").strip() == normalized_url:
-                existing_row_index = i
-                break
+    existing_row_index = _find_existing_row(sheet, headers, cols, job_row)
 
     if existing_row_index is not None:
         updates = []
@@ -127,5 +155,4 @@ def append_job_row(
         col_name = cols.get(field, "")
         if col_name and col_name in headers:
             row[headers.index(col_name)] = value
-
     sheet.append_row(row)

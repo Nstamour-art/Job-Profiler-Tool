@@ -17,7 +17,7 @@ from src.llm import parse_job_description, generate_resume, generate_cover_lette
 from src.document import build_resume, build_cover_letter
 from src.debug import log_scraped, log_job_details, log_resume, log_cover_letter, log_output_folder
 from src.themes import ThemeConfig, CLASSIC, PRESETS, merge_overrides, TemplateOverrides
-from src.sheets import append_job_row
+from src.sheets import upsert_job_row
 from src.models import Outcome
 
 if TYPE_CHECKING:
@@ -254,7 +254,7 @@ def _log_to_sheet(config: dict, job_data: dict, job_details: "JobDetails", resul
             priority=priority,
             reasoning=reasoning,
         )
-        append_job_row(config=config, job_row=job_row)
+        upsert_job_row(config=config, job_row=job_row)
         return Outcome(success=True, message="Job logged to Google Sheets.")
     except Exception as exc:  # pylint: disable=broad-exception-caught
         return Outcome(success=False, message=f"Sheet logging failed: {exc}")

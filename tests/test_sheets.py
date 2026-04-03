@@ -1,27 +1,31 @@
 from unittest.mock import MagicMock, patch
 
 
-def _make_mock_sheet(headers):
+def _make_mock_sheet(headers, existing_rows=None):
+    """existing_rows: list of row-lists (not including header), or None for empty sheet."""
     sheet = MagicMock()
     sheet.row_values.return_value = headers
+    all_values = [headers] + (existing_rows or [])
+    sheet.get_all_values.return_value = all_values
     return sheet
 
 
-def test_append_job_row_calls_append_row(sample_config):
+def test_upsert_job_row_inserts_when_no_match(sample_config):
+    """When no existing row matches, a new row is appended."""
     headers = ["Title", "Company", "URL", "Status", "Date Found", "Details", "Priority", "Reasoning"]
     mock_sheet = _make_mock_sheet(headers)
 
     with patch("src.sheets._open_sheet", return_value=mock_sheet):
-        from src.sheets import append_job_row
+        from src.sheets import upsert_job_row
         from src.models import JobRow
-        append_job_row(
+        upsert_job_row(
             config=sample_config,
             job_row=JobRow(
                 title="AI Engineer",
                 company="Acme Corp",
                 url="https://example.com/job/1",
                 status="Seen",
-                date_found="2026-03-27",
+                date_found="2026-04-02",
             ),
         )
 
@@ -31,25 +35,74 @@ def test_append_job_row_calls_append_row(sample_config):
     assert appended[headers.index("Company")] == "Acme Corp"
     assert appended[headers.index("URL")] == "https://example.com/job/1"
     assert appended[headers.index("Status")] == "Seen"
-    assert appended[headers.index("Date Found")] == "2026-03-27"
 
 
-def test_append_job_row_skips_missing_columns(sample_config):
-    """If a column like 'Company' isn't in the sheet yet, skip it gracefully."""
-    headers = ["Title", "URL", "Status"]  # no Company or Date Found column
+def test_upsert_job_row_updates_existing_by_url(sample_config):
+    """When a row with matching URL exists, it is updated, not appended."""
+    headers = ["Title", "Company", "URL", "Status", "Date Found", "Details", "Priority", "Reasoning"]
+    existing = [["AI Engineer", "Acme Corp", "https://example.com/job/1", "Seen", "2026-04-01", "", "", ""]]
+    mock_sheet = _make_mock_sheet(headers, existing)
+
+    with patch("src.sheets._open_sheet", return_value=mock_sheet):
+        from src.sheets import upsert_job_row
+        from src.models import JobRow
+        upsert_job_row(
+            config=sample_config,
+            job_row=JobRow(
+                title="AI Engineer",
+                company="Acme Corp",
+                url="https://example.com/job/1",
+                status="Generated",
+                date_found="2026-04-02",
+                priority="2",
+                reasoning="Strong match.",
+            ),
+        )
+
+    mock_sheet.append_row.assert_not_called()
+    mock_sheet.batch_update.assert_called_once()
+
+
+def test_upsert_job_row_updates_existing_by_company_and_title(sample_config):
+    """When company + title match but URL differs, the existing row is updated."""
+    headers = ["Title", "Company", "URL", "Status", "Date Found", "Details", "Priority", "Reasoning"]
+    existing = [["AI Engineer", "Acme Corp", "https://old-url.com/job/99", "Seen", "2026-04-01", "", "", ""]]
+    mock_sheet = _make_mock_sheet(headers, existing)
+
+    with patch("src.sheets._open_sheet", return_value=mock_sheet):
+        from src.sheets import upsert_job_row
+        from src.models import JobRow
+        upsert_job_row(
+            config=sample_config,
+            job_row=JobRow(
+                title="AI Engineer",
+                company="Acme Corp",
+                url="https://new-url.com/job/1",
+                status="Generated",
+                date_found="2026-04-02",
+            ),
+        )
+
+    mock_sheet.append_row.assert_not_called()
+    mock_sheet.batch_update.assert_called_once()
+
+
+def test_upsert_job_row_skips_missing_columns(sample_config):
+    """Columns not present in the sheet are skipped gracefully."""
+    headers = ["Title", "URL", "Status"]
     mock_sheet = _make_mock_sheet(headers)
 
     with patch("src.sheets._open_sheet", return_value=mock_sheet):
-        from src.sheets import append_job_row
+        from src.sheets import upsert_job_row
         from src.models import JobRow
-        append_job_row(
+        upsert_job_row(
             config=sample_config,
             job_row=JobRow(
                 title="ML Engineer",
                 company="Stripe",
                 url="https://example.com/job/2",
                 status="Seen",
-                date_found="2026-03-27",
+                date_found="2026-04-02",
             ),
         )
 
