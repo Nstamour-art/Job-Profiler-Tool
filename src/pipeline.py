@@ -10,6 +10,7 @@ from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 import yaml as _yaml
+from pydantic import ValidationError as _PydanticValidationError
 
 from src import ui
 from src.scraper import scrape_job, ScraperError
@@ -60,7 +61,7 @@ def _load_theme(template_path: str) -> ThemeConfig:
         return base
     except FileNotFoundError:
         return CLASSIC
-    except (AttributeError, TypeError, _yaml.YAMLError):
+    except (AttributeError, TypeError, _yaml.YAMLError, _PydanticValidationError):
         return CLASSIC
 
 

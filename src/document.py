@@ -411,7 +411,9 @@ def _build_resume_sidebar(resume_json: ResumeJSON, personal: dict, education: li
     _render_main_column(right_cell, resume_json, main_width_emu, theme)
 
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    _dirname = os.path.dirname(output_path)
+    if _dirname:
+        os.makedirs(_dirname, exist_ok=True)
     doc.save(output_path)
     return output_path
 
@@ -579,7 +581,9 @@ def build_resume(resume_json: ResumeJSON, personal: dict, education: list,
 
     _render_resume_education_certs(doc, education, resume_json.certifications, theme)
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    _dirname = os.path.dirname(output_path)
+    if _dirname:
+        os.makedirs(_dirname, exist_ok=True)
     doc.save(output_path)
     return output_path
 
@@ -728,6 +732,8 @@ def build_cover_letter(cover_json: CoverLetterJSON, personal: dict,
     sig_contact_run = sig_contact_paragraph.add_run(sig_contact_line)
     _set_font(sig_contact_run, cover_pt, font_name=theme.font)
 
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    _dirname = os.path.dirname(output_path)
+    if _dirname:
+        os.makedirs(_dirname, exist_ok=True)
     doc.save(output_path)
     return output_path
