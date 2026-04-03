@@ -20,12 +20,29 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.providers import BaseProvider
 
-_JOB_KEYWORDS = {"responsibilities", "qualifications", "requirements", "apply", "experience"}
+_JOB_KEYWORDS = {
+    "responsibilities",
+    "qualifications",
+    "requirements",
+    "apply",
+    "skills",
+    "salary",
+    "compensation",
+}
 _VALIDATION_MAX_CHARS = 3000
 _HEAD_TIMEOUT = 5
 _GET_TIMEOUT = 10
 _HEURISTIC_PASS_THRESHOLD = 3   # score >= this → PASS without AI
 _HEURISTIC_DROP_THRESHOLD = 1   # score < this → DROP without AI
+_SEARCH_RESULT_PATTERNS = (
+    "/jobs/search",
+    "/search?",
+    "/find-jobs",
+    "/job-search",
+    "q=",
+    "/jobs?",
+    "/careers/search",
+)
 
 
 class _ValidatorResult(BaseModel):
@@ -33,7 +50,11 @@ class _ValidatorResult(BaseModel):
 
 
 def _is_url_live(url: str) -> bool:
-    """Return True if a HEAD request returns a 2xx status code."""
+    """Return True if the URL appears reachable.
+
+    405 and 501 indicate HEAD is not supported by the server — the URL is
+    still live and will be checked via GET in _fetch_snippet.
+    """
     try:
         resp = requests.head(
             url,
@@ -41,7 +62,7 @@ def _is_url_live(url: str) -> bool:
             allow_redirects=True,
             headers={"User-Agent": "Mozilla/5.0"},
         )
-        return 200 <= resp.status_code < 300
+        return 200 <= resp.status_code < 300 or resp.status_code in (405, 501)
     except requests.RequestException:
         return False
 
@@ -63,7 +84,7 @@ def _fetch_snippet(url: str) -> str | None:
         return None
 
 
-def _heuristic_score(text: str, title: str, company: str) -> int:
+def _heuristic_score(text: str, title: str, company: str, url: str = "") -> int:
     """Score a page 0–5 based on signals that it is a specific job posting.
 
     Scoring:
@@ -71,6 +92,7 @@ def _heuristic_score(text: str, title: str, company: str) -> int:
       +1  any significant word (>3 chars) from the job title present
       +1  at least 2 of the job-related keywords present
       +1  page text length >= 500 chars (not a stub/redirect/login wall)
+      -2  URL matches known search results page patterns
     """
     if not text:
         return 0
@@ -92,7 +114,10 @@ def _heuristic_score(text: str, title: str, company: str) -> int:
     if len(text) >= 500:
         score += 1
 
-    return score
+    if url and any(pat in url.lower() for pat in _SEARCH_RESULT_PATTERNS):
+        score -= 2
+
+    return max(score, 0)
 
 
 def _ask_parser(
@@ -165,7 +190,7 @@ def validate_job_links(
 
         title = job.get("title", "")
         company = job.get("company", "")
-        score = _heuristic_score(snippet, title, company)
+        score = _heuristic_score(snippet, title, company, url=url)
 
         if score >= _HEURISTIC_PASS_THRESHOLD:
             validated.append(job)

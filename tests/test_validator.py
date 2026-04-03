@@ -21,6 +21,15 @@ def test_is_url_live_returns_false_for_404():
         assert _is_url_live("https://example.com/job/1") is False
 
 
+def test_is_url_live_returns_true_for_405():
+    """405 means HEAD not supported — server is alive, GET will decide."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 405
+    with patch("src.validator.requests.head", return_value=mock_resp):
+        from src.validator import _is_url_live
+        assert _is_url_live("https://example.com/job/1") is True
+
+
 def test_is_url_live_returns_false_on_request_exception():
     import requests as req
     with patch("src.validator.requests.head", side_effect=req.RequestException("timeout")):
@@ -76,6 +85,19 @@ def test_heuristic_score_zero_for_empty_page():
     from src.validator import _heuristic_score
     score = _heuristic_score("", title="Engineer", company="Corp")
     assert score == 0
+
+
+def test_heuristic_score_penalises_search_result_urls():
+    from src.validator import _heuristic_score
+    text = (
+        "Acme Corp is hiring a Senior AI Engineer. "
+        "Responsibilities include building ML pipelines. "
+        "Qualifications: 5+ years Python. Apply now. " * 20
+    )
+    score_direct = _heuristic_score(text, title="Senior AI Engineer", company="Acme Corp", url="https://linkedin.com/jobs/view/123")
+    score_search = _heuristic_score(text, title="Senior AI Engineer", company="Acme Corp", url="https://linkedin.com/jobs/search?keywords=engineer")
+    assert score_search < score_direct
+    assert score_search <= 3  # search result URL causes penalty
 
 
 # ---------------------------------------------------------------------------
