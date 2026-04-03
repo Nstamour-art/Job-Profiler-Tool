@@ -94,6 +94,19 @@ def test_generate_batch_marks_failed_jobs(sample_config, sample_resume):
     assert "Acme" in result
 
 
+def test_generate_batch_returns_message_for_empty_jobs(sample_config, sample_resume):
+    from src.tools.generate import create_generate_batch_tool
+    tool = create_generate_batch_tool(
+        config=sample_config,
+        resume=sample_resume,
+        provider=MagicMock(),
+        models=["model"],
+        parser_models=["model"],
+    )
+    result = tool.invoke({"jobs": []})
+    assert "No jobs provided" in result
+
+
 def test_generate_batch_sleeps_between_batches(sample_config, sample_resume):
     """With batch_size=2 and 3 jobs, sleep should be called once (between batch 1 and 2)."""
     sample_config["agent"]["batch_size"] = 2

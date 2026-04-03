@@ -98,6 +98,9 @@ def create_generate_batch_tool(
         Returns:
             A status line per job: ✓ on success, ✗ on failure.
         """
+        if not jobs:
+            return "No jobs provided to generate documents for."
+
         from src.models import JobOptions, ProviderSuite  # pylint: disable=import-outside-toplevel
 
         ps = ProviderSuite(

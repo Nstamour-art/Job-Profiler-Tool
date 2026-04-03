@@ -141,6 +141,8 @@ TOOLS AVAILABLE:
 - search_jobs: Search the web for job listings. Provide a preferences summary as input.
   When multiple roles are provided, include all titles in the summary under "Roles:".
   Always call this after gathering the candidate's role(s), location, and salary preferences.
+  The result includes 'validated_count' (links confirmed valid) and 'fetched_count' (total found).
+  If validated_count < fetched_count, tell the user how many were found vs validated, and offer to search again.
 - generate_batch: Generate tailored resumes and cover letters for one or more job postings.
   Pass ALL confirmed jobs as a list in a single call — do not call once per job.
   Only call this after the candidate has explicitly confirmed which jobs they want.

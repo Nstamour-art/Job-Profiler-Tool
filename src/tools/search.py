@@ -77,6 +77,7 @@ def create_search_tool(
             if not isinstance(parsed, dict):
                 return raw  # couldn't parse — return raw for agent to handle
             jobs = parsed.get("jobs", [])
+            total_fetched = len(jobs)
 
             # Validate links (requires provider + parser_models)
             if provider is not None and parser_models:
@@ -103,7 +104,11 @@ def create_search_tool(
                     except Exception:  # pylint: disable=broad-exception-caught
                         pass  # sheet failure must never abort search
 
-            return json.dumps({"jobs": jobs})
+            return json.dumps({
+                "jobs": jobs,
+                "validated_count": len(jobs),
+                "fetched_count": total_fetched,
+            })
         except Exception as exc:  # pylint: disable=broad-exception-caught
             return f"Search failed: {exc}"
 
