@@ -141,3 +141,58 @@ def test_upsert_job_row_does_not_overwrite_date_found(sample_config):
     date_col_index = headers.index("Date Found") + 1
     date_cell = gspread.utils.rowcol_to_a1(2, date_col_index)
     assert date_cell not in update_ranges
+
+
+def test_upsert_job_row_url_match_takes_priority_over_company_title(sample_config):
+    """When both a URL match and a company+title match exist in different rows, URL match wins."""
+    headers = ["Title", "Company", "URL", "Status", "Date Found", "Details", "Priority", "Reasoning"]
+    existing = [
+        # Row 2: company+title match, different URL
+        ["AI Engineer", "Acme Corp", "https://old-url.com/job/99", "Seen", "2026-04-01", "", "", ""],
+        # Row 3: URL match, different title
+        ["Different Title", "Acme Corp", "https://example.com/job/1", "Seen", "2026-04-01", "", "", ""],
+    ]
+    mock_sheet = _make_mock_sheet(headers, existing)
+
+    with patch("src.sheets._open_sheet", return_value=mock_sheet):
+        from src.sheets import upsert_job_row
+        from src.models import JobRow
+        upsert_job_row(
+            config=sample_config,
+            job_row=JobRow(
+                title="AI Engineer",
+                company="Acme Corp",
+                url="https://example.com/job/1",
+                status="Generated",
+                date_found="2026-04-02",
+            ),
+        )
+
+    mock_sheet.append_row.assert_not_called()
+    mock_sheet.batch_update.assert_called_once()
+    # The batch_update should target row 3 (URL match), not row 2 (company+title match)
+    update_ranges = [u["range"] for u in mock_sheet.batch_update.call_args[0][0]]
+    assert all(r.endswith("3") for r in update_ranges)
+
+
+def test_upsert_job_row_handles_empty_sheet(sample_config):
+    """An empty sheet (header only, no data rows) should result in a new row being appended."""
+    headers = ["Title", "Company", "URL", "Status", "Date Found", "Details", "Priority", "Reasoning"]
+    mock_sheet = _make_mock_sheet(headers, existing_rows=[])  # no data rows
+
+    with patch("src.sheets._open_sheet", return_value=mock_sheet):
+        from src.sheets import upsert_job_row
+        from src.models import JobRow
+        upsert_job_row(
+            config=sample_config,
+            job_row=JobRow(
+                title="AI Engineer",
+                company="Acme Corp",
+                url="https://example.com/job/1",
+                status="Seen",
+                date_found="2026-04-02",
+            ),
+        )
+
+    mock_sheet.append_row.assert_called_once()
+    mock_sheet.batch_update.assert_not_called()

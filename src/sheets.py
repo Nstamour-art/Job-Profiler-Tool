@@ -95,17 +95,23 @@ def _find_existing_row(
     if len(all_values) < 2:
         return None
 
-    for row_idx, row in enumerate(all_values[1:], start=2):
-        def _cell(col_name: str) -> str:
-            if col_name not in headers:
-                return ""
-            idx = headers.index(col_name)
-            return (row[idx] if idx < len(row) else "").strip().lower()
+    def _cell(row: list, col_name: str) -> str:
+        if col_name not in headers:
+            return ""
+        idx = headers.index(col_name)
+        return (row[idx] if idx < len(row) else "").strip().lower()
 
-        if norm_url and _cell(url_col) == norm_url:
-            return row_idx
-        if norm_title and norm_company and _cell(title_col) == norm_title and _cell(company_col) == norm_company:
-            return row_idx
+    # First pass: URL match takes priority
+    if norm_url:
+        for row_idx, row in enumerate(all_values[1:], start=2):
+            if _cell(row, url_col) == norm_url:
+                return row_idx
+
+    # Second pass: company + title match as fallback
+    if norm_title and norm_company:
+        for row_idx, row in enumerate(all_values[1:], start=2):
+            if _cell(row, title_col) == norm_title and _cell(row, company_col) == norm_company:
+                return row_idx
 
     return None
 
