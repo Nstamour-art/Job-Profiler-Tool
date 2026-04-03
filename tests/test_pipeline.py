@@ -72,3 +72,26 @@ def test_process_job_uses_classic_when_no_template_yaml(tmp_path, monkeypatch): 
 
     assert captured_theme.get("theme") is not None
     assert captured_theme["theme"].name == "classic"
+
+
+def test_parse_job_description_wraps_content_in_delimiters(sample_config):
+    """parse_job_description must wrap scraped content in untrusted-content delimiters."""
+    captured_prompt = {}
+
+    def fake_call_with_retry(model_class, provider, llm_cfg, system, prompt, models):
+        captured_prompt["value"] = prompt
+        from src.models import JobDetails
+        return JobDetails(
+            company="Acme", title="AI Engineer", seniority="Senior",
+            industry="SaaS", required_skills=[], preferred_skills=[],
+            responsibilities=[], culture_signals=[], salary_range=""
+        )
+
+    with patch("src.llm._call_with_retry", side_effect=fake_call_with_retry):
+        from src.llm import parse_job_description
+        job = {"title": "AI Engineer", "company": "Acme", "description": "You will build AI systems."}
+        parse_job_description(job, sample_config, MagicMock(), ["model"])
+
+    assert "--- BEGIN UNTRUSTED CONTENT ---" in captured_prompt["value"]
+    assert "--- END UNTRUSTED CONTENT ---" in captured_prompt["value"]
+    assert "You will build AI systems." in captured_prompt["value"]

@@ -120,8 +120,9 @@ def parse_job_description(
     prompt = f"""JOB TITLE (from URL/sheet): {job.get('title', job.get('job_title', ''))}
 COMPANY (from URL/sheet): {job.get('company', '')}
 
-RAW PAGE CONTENT:
+--- BEGIN UNTRUSTED CONTENT ---
 {job['description']}
+--- END UNTRUSTED CONTENT ---
 """
     return _call_with_retry(
         JobDetails, provider, config["llm"], JOB_PARSER_SYSTEM_PROMPT, prompt, parser_models
