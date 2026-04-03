@@ -83,7 +83,15 @@ def _init_tools(
     provider = get_provider(provider_name, config["llm"])
 
     return [
-        create_search_tool(agent_model, tavily_api_key, max_jobs, parser_model=parser_model),
+        create_search_tool(
+            agent_model,
+            tavily_api_key,
+            max_jobs,
+            parser_model=parser_model,
+            config=config,
+            provider=provider,
+            parser_models=parser_models,
+        ),
         create_generate_tool(config, resume, provider, models, parser_models),
         *create_resume_tools(config["paths"]["resume_yaml"]),
         _create_change_template_tool(config, provider_name),
