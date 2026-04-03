@@ -62,12 +62,19 @@ def create_resume_tools(resume_path: str):
             return "New content is empty — section not written."
 
         with open(resume_path, encoding="utf-8") as f:
-            resume = yaml.safe_load(f)
+            resume = yaml.safe_load(f) or {}
 
         resume[section] = parsed
 
-        with open(resume_path, "w", encoding="utf-8") as f:
-            yaml.dump(resume, f, allow_unicode=True, default_flow_style=False)
+        import os  # pylint: disable=import-outside-toplevel
+        import tempfile  # pylint: disable=import-outside-toplevel
+        dir_name = os.path.dirname(os.path.abspath(resume_path))
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", dir=dir_name, delete=False, suffix=".tmp"
+        ) as tmp:
+            yaml.dump(resume, tmp, allow_unicode=True, default_flow_style=False)
+            tmp_path = tmp.name
+        os.replace(tmp_path, resume_path)
 
         return f"resume.yaml updated: '{section}' section replaced successfully."
 
