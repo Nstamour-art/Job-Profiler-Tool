@@ -117,15 +117,15 @@ def upsert_job_row(
     """Insert or update a job row in the sheet.
 
     Match strategy: URL matches OR (company + title both match).
-    If a match is found, all columns are updated in-place.
-    If no match, a new row is appended.
+    On insert: all fields including date_found are written.
+    On update: all fields except date_found are written (preserve original search date).
     Skips any column not present in the sheet.
     """
     sheet = _open_sheet(config)
     cols = config["google_sheets"]["columns"]
     headers = sheet.row_values(1)
 
-    field_map = {
+    full_field_map = {
         "job_title": job_row.title,
         "company": job_row.company,
         "url": job_row.url,
@@ -136,11 +136,13 @@ def upsert_job_row(
         "reasoning": job_row.reasoning,
     }
 
+    update_field_map = {k: v for k, v in full_field_map.items() if k != "date_found"}
+
     existing_row_index = _find_existing_row(sheet, headers, cols, job_row)
 
     if existing_row_index is not None:
         updates = []
-        for field, value in field_map.items():
+        for field, value in update_field_map.items():
             col_name = cols.get(field, "")
             if col_name and col_name in headers:
                 col_index = headers.index(col_name) + 1
@@ -151,7 +153,7 @@ def upsert_job_row(
         return
 
     row = [""] * len(headers)
-    for field, value in field_map.items():
+    for field, value in full_field_map.items():
         col_name = cols.get(field, "")
         if col_name and col_name in headers:
             row[headers.index(col_name)] = value
