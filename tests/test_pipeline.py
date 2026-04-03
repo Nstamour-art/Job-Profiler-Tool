@@ -95,3 +95,35 @@ def test_parse_job_description_wraps_content_in_delimiters(sample_config):
     assert "--- BEGIN UNTRUSTED CONTENT ---" in captured_prompt["value"]
     assert "--- END UNTRUSTED CONTENT ---" in captured_prompt["value"]
     assert "You will build AI systems." in captured_prompt["value"]
+
+
+def test_generate_resume_wraps_job_details_in_delimiters(sample_config, sample_resume):
+    """generate_resume must wrap job details in untrusted-content delimiters."""
+    captured = {}
+
+    def fake_retry(model_class, provider, llm_cfg, system, prompt, models):
+        captured["prompt"] = prompt
+        from src.models import ResumeJSON
+        return ResumeJSON(
+            summary="Test summary",
+            skill_categories=[],
+            experience=[],
+            projects_section_heading="Projects",
+            projects=[],
+            certifications=[],
+            priority=5,
+            priority_reasoning="Test",
+        )
+
+    with patch("src.llm._call_with_retry", side_effect=fake_retry):
+        from src.llm import generate_resume
+        from src.models import JobDetails
+        job = JobDetails(
+            company="Acme", title="AI Engineer", seniority="Senior",
+            industry="SaaS", required_skills=["Python"], preferred_skills=[],
+            responsibilities=["Build things"], culture_signals=[], salary_range=""
+        )
+        generate_resume(job, sample_resume, sample_config, MagicMock(), ["model"])
+
+    assert "--- BEGIN UNTRUSTED CONTENT ---" in captured["prompt"]
+    assert "--- END UNTRUSTED CONTENT ---" in captured["prompt"]
