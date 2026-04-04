@@ -74,6 +74,22 @@ def test_process_job_uses_classic_when_no_template_yaml(tmp_path, monkeypatch): 
     assert captured_theme["theme"].name == "classic"
 
 
+def test_load_theme_returns_classic_on_pydantic_validation_error(tmp_path):
+    """_load_theme must catch Pydantic ValidationError and fall back to CLASSIC."""
+    import yaml as _yaml
+    template_path = tmp_path / "template.yaml"
+    # Valid YAML but invalid Pydantic: overrides contains a bad type
+    template_path.write_text(
+        _yaml.dump({"theme": "modern", "overrides": {"body_pt": "not-a-number"}}),
+        encoding="utf-8",
+    )
+
+    from src.pipeline import _load_theme
+    from src.themes import CLASSIC
+    result = _load_theme(str(template_path))
+    assert result.name == CLASSIC.name
+
+
 def test_parse_job_description_wraps_content_in_delimiters(sample_config):
     """parse_job_description must wrap scraped content in untrusted-content delimiters."""
     captured_prompt = {}

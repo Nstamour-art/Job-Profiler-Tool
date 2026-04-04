@@ -160,3 +160,31 @@ def test_validate_job_links_drops_if_ai_says_no(sample_config):
         result = validate_job_links(jobs, sample_config, MagicMock(), ["model"], max_jobs=10)
 
     assert len(result) == 0
+
+
+def test_validate_job_links_skips_url_when_snippet_is_none(sample_config):
+    """When _fetch_snippet returns None the URL is skipped, not included."""
+    jobs = [{"url": "https://example.com/job/1", "title": "AI Engineer", "company": "Acme"}]
+
+    with patch("src.validator._is_url_live", return_value=True), \
+         patch("src.validator._fetch_snippet", return_value=None):
+        from src.validator import validate_job_links
+        result = validate_job_links(jobs, sample_config, MagicMock(), ["model"], max_jobs=10)
+
+    assert result == []
+
+
+def test_ask_parser_returns_true_on_llm_exception(sample_config):
+    """_ask_parser errs on inclusion — returns True when LLM call raises."""
+    with patch("src.llm._call_with_retry", side_effect=RuntimeError("LLM down")):
+        from src.validator import _ask_parser
+        result = _ask_parser(
+            snippet="some page text",
+            title="AI Engineer",
+            company="Acme",
+            provider=MagicMock(),
+            config=sample_config,
+            parser_models=["model"],
+        )
+
+    assert result is True

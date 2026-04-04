@@ -46,3 +46,17 @@ def test_write_resume_section_rejects_unknown_section(tmp_path, sample_resume):
     result = write_tool.invoke({"section": "nonexistent", "new_content": "{}"})
 
     assert "Invalid section" in result
+
+
+def test_write_resume_section_handles_empty_yaml_file(tmp_path):
+    """write_resume_section must not crash when resume.yaml is empty (yaml.safe_load returns None)."""
+    resume_path = tmp_path / "resume.yaml"
+    resume_path.write_text("", encoding="utf-8")  # empty file → yaml.safe_load returns None
+
+    from src.tools.resume_editor import create_resume_tools
+    _, write_tool = create_resume_tools(str(resume_path))
+    result = write_tool.invoke({"section": "basics", "new_content": "name: Jane Doe\n"})
+
+    assert "updated" in result
+    updated = yaml.safe_load(resume_path.read_text(encoding="utf-8"))
+    assert updated["basics"]["name"] == "Jane Doe"
