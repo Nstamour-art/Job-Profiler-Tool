@@ -401,8 +401,8 @@ def _build_resume_sidebar(resume_json: ResumeJSON, personal: dict, education: li
     _no_border_cell(left_cell)
     _no_border_cell(right_cell)
 
-    left_cell.width = Twips(sidebar_width_emu // 20)
-    right_cell.width = Twips(main_width_emu // 20)
+    left_cell.width = sidebar_width_emu
+    right_cell.width = main_width_emu
     red, green, blue = theme.sidebar_color
     _shade_cell(left_cell, f"{red:02x}{green:02x}{blue:02x}")
 
