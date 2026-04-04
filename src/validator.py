@@ -12,10 +12,10 @@ Pipeline per URL:
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 import requests
 from bs4 import BeautifulSoup
 from pydantic import BaseModel
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.providers import BaseProvider

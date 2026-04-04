@@ -22,7 +22,8 @@ from src.sheets import upsert_job_row
 from src.models import Outcome
 
 if TYPE_CHECKING:
-    from src.models import ResumeJSON, JobDetails, JobOptions, PipelineContext, PipelineResults, ProviderSuite
+    from src.models import ResumeJSON, JobDetails, \
+        JobOptions, PipelineContext, PipelineResults, ProviderSuite
     from src.providers import BaseProvider
 
 
@@ -145,7 +146,6 @@ def _save_documents(
             cover_json=results.cover_json,
             personal=ctx.resume["basics"],
             company=company,
-            _job_title=title,
             output_path=cover_path,
             theme=theme,
         )
@@ -180,7 +180,7 @@ def process_job(
 ) -> tuple[str, dict, "ResumeJSON | None", "Outcome"]:
     """
     Full pipeline for one job:
-      scrape (or use cached details) → parse → LLM resume → LLM cover letter → write docx
+        scrape (or use cached details) → parse → LLM resume → LLM cover letter → write docx
     Returns (output_directory_path, job_data, resume_json, sheet_outcome).
     """
     from src.models import PipelineContext, JobOptions  # pylint: disable=import-outside-toplevel

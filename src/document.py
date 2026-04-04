@@ -2,16 +2,16 @@
 Programmatic Word document builder for resumes and cover letters.
 
 Formatting spec:
-  - Font: Arial throughout (default / CLASSIC theme)
-  - Body text: 10pt
-  - Section headings: 12pt, Bold, ALL CAPS
-  - Name header: 14pt, Bold, Centered
-  - Contact line: 10pt, Centered
-  - Company/location line: 10pt, Bold — company LEFT, dates RIGHT-TABBED
-  - Role: 10pt, Italic
-  - Bullets: 10pt, 0.25" hanging indent
-  - Education & Certs: borderless 2-column table (left=education, right=certs);
-    single-column if no certs returned
+    - Font: Arial throughout (default / CLASSIC theme)
+    - Body text: 10pt
+    - Section headings: 12pt, Bold, ALL CAPS
+    - Name header: 14pt, Bold, Centered
+    - Contact line: 10pt, Centered
+    - Company/location line: 10pt, Bold — company LEFT, dates RIGHT-TABBED
+    - Role: 10pt, Italic
+    - Bullets: 10pt, 0.25" hanging indent
+    - Education & Certs: borderless 2-column table (left=education, right=certs);
+        single-column if no certs returned
 """
 
 import os
@@ -45,7 +45,7 @@ RIGHT_TAB_POS = Twips(9360)  # 6.5" at 1" margins on US Letter
 
 
 def _set_font(run, size_pt: int, bold: bool = False, italic: bool = False,
-              color: RGBColor | None = None, font_name: str = "Arial"):
+                color: RGBColor | None = None, font_name: str = "Arial"):
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     run.font.name = font_name
     run.font.size = Pt(size_pt)
@@ -67,7 +67,7 @@ def _add_right_tab(paragraph, pos_twips: int | None = None):
 
 
 def _set_space(paragraph, before_pt: float = 0, after_pt: float = 0,
-               line_rule: str | None = None, line_val: int | None = None):
+                line_rule: str | None = None, line_val: int | None = None):
     paragraph_properties = paragraph._p.get_or_add_pPr()  # pylint: disable=protected-access
     spacing_element = OxmlElement("w:spacing")
     spacing_element.set(qn("w:before"), str(int(before_pt * 20)))
@@ -126,8 +126,8 @@ def _section_heading(doc: "DocxDocument", text: str, theme: "ThemeConfig"):
     )
     _set_space(paragraph, before_pt=8, after_pt=2)
     heading_run = paragraph.add_run(text.upper())
-    _set_font(heading_run, theme.heading_pt, bold=True, color=RGBColor(*theme.accent_color),
-              font_name=theme.font)
+    _set_font(heading_run, int(theme.heading_pt), bold=True, color=RGBColor(*theme.accent_color),
+                font_name=theme.font)
     paragraph_properties = paragraph._p.get_or_add_pPr()  # pylint: disable=protected-access
     if theme.heading_rule:
         border_element = OxmlElement("w:pBdr")
@@ -177,8 +177,8 @@ def _bullet(doc: "DocxDocument", text: str, body_pt: int = 10, font_name: str = 
 
 
 def _company_line(doc: "DocxDocument", company: str, location: str, dates: str,
-                  right_tab_twips: int | None = None, body_pt: int = 10,
-                  font_name: str = "Arial"):
+                    right_tab_twips: int | None = None, body_pt: int = 10,
+                    font_name: str = "Arial"):
     """Company + location LEFT, dates RIGHT using a tab stop."""
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     paragraph = doc.add_paragraph()
@@ -221,8 +221,8 @@ def _render_sidebar_column(left_cell, resume_json, personal, education, theme: T
     name_paragraph = left_cell.paragraphs[0]
     _set_space(name_paragraph, before_pt=6, after_pt=2)
     name_run = name_paragraph.add_run(personal["name"])
-    _set_font(name_run, theme.name_pt, bold=True, color=RGBColor(255, 255, 255),
-              font_name=theme.font)
+    _set_font(name_run, int(theme.name_pt), bold=True, color=RGBColor(255, 255, 255),
+                font_name=theme.font)
 
     # --- Location & Contact ---
     loc = personal.get("location", {})
@@ -238,15 +238,15 @@ def _render_sidebar_column(left_cell, resume_json, personal, education, theme: T
         contact_paragraph = left_cell.add_paragraph()
         _set_space(contact_paragraph, before_pt=1, after_pt=1)
         contact_run = contact_paragraph.add_run(line)
-        _set_font(contact_run, theme.body_pt - 1, color=RGBColor(200, 200, 200),
-                  font_name=theme.font)
+        _set_font(contact_run, int(theme.body_pt) - 1, color=RGBColor(200, 200, 200),
+                    font_name=theme.font)
 
     def __sidebar_section(text: str):
         section_paragraph = left_cell.add_paragraph()
         _set_space(section_paragraph, before_pt=10, after_pt=3)
         section_run = section_paragraph.add_run(text.upper())
-        _set_font(section_run, theme.heading_pt, bold=True, color=RGBColor(180, 180, 180),
-                  font_name=theme.font)
+        _set_font(section_run, int(theme.heading_pt), bold=True, color=RGBColor(180, 180, 180),
+                    font_name=theme.font)
         paragraph_properties = section_paragraph._p.get_or_add_pPr()  # pylint: disable=protected-access
         border_element = OxmlElement("w:pBdr")
         bottom_border = OxmlElement("w:bottom")
@@ -263,14 +263,14 @@ def _render_sidebar_column(left_cell, resume_json, personal, education, theme: T
         label_paragraph = left_cell.add_paragraph()
         _set_space(label_paragraph, before_pt=3, after_pt=1)
         label_run = label_paragraph.add_run(category.name)
-        _set_font(label_run, theme.body_pt - 1, bold=True, color=RGBColor(220, 220, 220),
-                  font_name=theme.font)
+        _set_font(label_run, int(theme.body_pt) - 1, bold=True, color=RGBColor(220, 220, 220),
+                    font_name=theme.font)
         for skill in category.skills:
             skill_paragraph = left_cell.add_paragraph()
             _set_space(skill_paragraph, before_pt=1, after_pt=0)
             skill_run = skill_paragraph.add_run(skill)
-            _set_font(skill_run, theme.body_pt - 1, color=RGBColor(190, 190, 190),
-                      font_name=theme.font)
+            _set_font(skill_run, int(theme.body_pt) - 1, color=RGBColor(190, 190, 190),
+                        font_name=theme.font)
 
     # --- Education ---
     if education:
@@ -281,14 +281,14 @@ def _render_sidebar_column(left_cell, resume_json, personal, education, theme: T
             edu_paragraph = left_cell.add_paragraph()
             _set_space(edu_paragraph, before_pt=3, after_pt=1)
             edu_run = edu_paragraph.add_run(degree or ed.get("institution", ""))
-            _set_font(edu_run, theme.body_pt - 1, bold=True, color=RGBColor(220, 220, 220),
-                      font_name=theme.font)
+            _set_font(edu_run, int(theme.body_pt) - 1, bold=True, color=RGBColor(220, 220, 220),
+                        font_name=theme.font)
             if degree and ed.get("institution"):
                 inst_paragraph = left_cell.add_paragraph()
                 _set_space(inst_paragraph, before_pt=0, after_pt=0)
                 inst_run = inst_paragraph.add_run(ed["institution"])
-                _set_font(inst_run, theme.body_pt - 1, color=RGBColor(190, 190, 190),
-                          font_name=theme.font)
+                _set_font(inst_run, int(theme.body_pt) - 1, color=RGBColor(190, 190, 190),
+                            font_name=theme.font)
 
     # --- Certifications ---
     if resume_json.certifications:
@@ -297,8 +297,8 @@ def _render_sidebar_column(left_cell, resume_json, personal, education, theme: T
             cert_paragraph = left_cell.add_paragraph()
             _set_space(cert_paragraph, before_pt=2, after_pt=1)
             cert_run = cert_paragraph.add_run(cert)
-            _set_font(cert_run, theme.body_pt - 1, color=RGBColor(190, 190, 190),
-                      font_name=theme.font)
+            _set_font(cert_run, int(theme.body_pt) - 1, color=RGBColor(190, 190, 190),
+                        font_name=theme.font)
 
 
 def _render_main_column(right_cell, resume_json, main_width_emu: int, theme: ThemeConfig):
@@ -308,7 +308,7 @@ def _render_main_column(right_cell, resume_json, main_width_emu: int, theme: The
         section_paragraph = right_cell.add_paragraph()
         _set_space(section_paragraph, before_pt=10, after_pt=3)
         section_run = section_paragraph.add_run(text.upper())
-        _set_font(section_run, theme.heading_pt, bold=True, font_name=theme.font)
+        _set_font(section_run, int(theme.heading_pt), bold=True, font_name=theme.font)
         paragraph_properties = section_paragraph._p.get_or_add_pPr()  # pylint: disable=protected-access
         if theme.heading_underline:
             border_element = OxmlElement("w:pBdr")
@@ -328,7 +328,7 @@ def _render_main_column(right_cell, resume_json, main_width_emu: int, theme: The
     summary_paragraph = right_cell.add_paragraph()
     _set_space(summary_paragraph, before_pt=2, after_pt=4)
     summary_run = summary_paragraph.add_run(resume_json.summary.strip())
-    _set_font(summary_run, theme.body_pt, font_name=theme.font)
+    _set_font(summary_run, int(theme.body_pt), font_name=theme.font)
 
     __main_section("Professional Experience")
     experience_list = sorted(resume_json.experience, key=_end_year, reverse=True)
@@ -338,20 +338,20 @@ def _render_main_column(right_cell, resume_json, main_width_emu: int, theme: The
         if right_tab_stop:
             _add_right_tab(company_paragraph, right_tab_stop)
         company_run = company_paragraph.add_run(f"{exp.company}")
-        _set_font(company_run, theme.body_pt, bold=True, font_name=theme.font)
+        _set_font(company_run, int(theme.body_pt), bold=True, font_name=theme.font)
         dates_run = company_paragraph.add_run("\t" + exp.dates)
-        _set_font(dates_run, theme.body_pt, bold=True, font_name=theme.font)
+        _set_font(dates_run, int(theme.body_pt), bold=True, font_name=theme.font)
         role_paragraph = right_cell.add_paragraph()
         _set_space(role_paragraph, before_pt=1, after_pt=1)
         role_run = role_paragraph.add_run(exp.role)
-        _set_font(role_run, theme.body_pt, italic=True, font_name=theme.font)
+        _set_font(role_run, int(theme.body_pt), italic=True, font_name=theme.font)
         for bullet in exp.bullets:
             bullet_paragraph = right_cell.add_paragraph(style="List Bullet")
             _set_space(bullet_paragraph, before_pt=0, after_pt=1)
             for run in bullet_paragraph.runs:
                 bullet_paragraph._p.remove(run._r)  # pylint: disable=protected-access
             bullet_run = bullet_paragraph.add_run(bullet)
-            _set_font(bullet_run, theme.body_pt, font_name=theme.font)
+            _set_font(bullet_run, int(theme.body_pt), font_name=theme.font)
 
     if resume_json.projects:
         __main_section(resume_json.projects_section_heading)
@@ -359,14 +359,14 @@ def _render_main_column(right_cell, resume_json, main_width_emu: int, theme: The
             project_paragraph = right_cell.add_paragraph()
             _set_space(project_paragraph, before_pt=4, after_pt=0)
             project_title_run = project_paragraph.add_run(project.title)
-            _set_font(project_title_run, theme.body_pt, bold=True, font_name=theme.font)
+            _set_font(project_title_run, int(theme.body_pt), bold=True, font_name=theme.font)
             for bullet in project.bullets:
                 bullet_paragraph = right_cell.add_paragraph(style="List Bullet")
                 _set_space(bullet_paragraph, before_pt=0, after_pt=1)
                 for run in bullet_paragraph.runs:
                     bullet_paragraph._p.remove(run._r)  # pylint: disable=protected-access
                 bullet_run = bullet_paragraph.add_run(bullet)
-                _set_font(bullet_run, theme.body_pt, font_name=theme.font)
+                _set_font(bullet_run, int(theme.body_pt), font_name=theme.font)
 
 
 # ---------------------------------------------------------------------------
@@ -375,7 +375,7 @@ def _render_main_column(right_cell, resume_json, main_width_emu: int, theme: The
 
 
 def _build_resume_sidebar(resume_json: ResumeJSON, personal: dict, education: list,
-                           output_path: str, theme: ThemeConfig):
+                            output_path: str, theme: ThemeConfig):
     """Render resume with two-column sidebar layout (Creative theme)."""
     # pylint: disable=too-many-locals
     doc = Document()
@@ -401,8 +401,8 @@ def _build_resume_sidebar(resume_json: ResumeJSON, personal: dict, education: li
     _no_border_cell(left_cell)
     _no_border_cell(right_cell)
 
-    left_cell.width = sidebar_width_emu
-    right_cell.width = main_width_emu
+    left_cell.width = Twips(sidebar_width_emu // 20)
+    right_cell.width = Twips(main_width_emu // 20)
     red, green, blue = theme.sidebar_color
     _shade_cell(left_cell, f"{red:02x}{green:02x}{blue:02x}")
 
@@ -432,8 +432,8 @@ def _render_resume_header(doc: "DocxDocument", personal: dict, theme: ThemeConfi
     )
     _set_space(name_paragraph, before_pt=0, after_pt=2)
     name_run = name_paragraph.add_run(personal["name"])
-    _set_font(name_run, theme.name_pt, bold=True, color=RGBColor(*theme.accent_color),
-              font_name=theme.font)
+    _set_font(name_run, int(theme.name_pt), bold=True, color=RGBColor(*theme.accent_color),
+                font_name=theme.font)
 
     loc = personal.get("location", {})
     loc_parts = [loc.get("city", ""), loc.get("region", ""), loc.get("countryCode", "")]
@@ -442,11 +442,11 @@ def _render_resume_header(doc: "DocxDocument", personal: dict, theme: ThemeConfi
     )
     linkedin = next(
         (profile.get("username", "") for profile in personal.get("profiles", [])
-         if profile.get("network") == "LinkedIn"), ""
+            if profile.get("network") == "LinkedIn"), ""
     )
     github = next(
         (profile.get("username", "") for profile in personal.get("profiles", [])
-         if profile.get("network") == "GitHub"), ""
+            if profile.get("network") == "GitHub"), ""
     )
     contact_parts = [
         location_str,
@@ -460,7 +460,7 @@ def _render_resume_header(doc: "DocxDocument", personal: dict, theme: ThemeConfi
     contact_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
     _set_space(contact_paragraph, before_pt=0, after_pt=4)
     contact_run = contact_paragraph.add_run(contact_line)
-    _set_font(contact_run, theme.body_pt, font_name=theme.font)
+    _set_font(contact_run, int(theme.body_pt), font_name=theme.font)
 
 
 def _render_resume_experience(doc: "DocxDocument", experience, right_tab, theme: ThemeConfig):
@@ -468,11 +468,11 @@ def _render_resume_experience(doc: "DocxDocument", experience, right_tab, theme:
     experience_list = sorted(experience, key=_end_year, reverse=True)
     for entry in experience_list:
         _company_line(doc, entry.company, "", entry.dates, right_tab_twips=right_tab,
-                      body_pt=theme.body_pt, font_name=theme.font)
+                        body_pt=int(theme.body_pt), font_name=theme.font)
         _body_paragraph(doc, entry.role, italic=True, before_pt=1, after_pt=1,
-                        body_pt=theme.body_pt, font_name=theme.font)
+                        body_pt=int(theme.body_pt), font_name=theme.font)
         for bullet in entry.bullets:
-            _bullet(doc, bullet, body_pt=theme.body_pt, font_name=theme.font)
+            _bullet(doc, bullet, body_pt=int(theme.body_pt), font_name=theme.font)
 
 
 def _render_resume_skills(doc: "DocxDocument", skill_categories, theme: ThemeConfig):
@@ -483,9 +483,9 @@ def _render_resume_skills(doc: "DocxDocument", skill_categories, theme: ThemeCon
         for run in bullet_paragraph.runs:
             bullet_paragraph._p.remove(run._r)  # pylint: disable=protected-access
         label_run = bullet_paragraph.add_run(f"{category.name}: ")
-        _set_font(label_run, theme.body_pt, bold=True, font_name=theme.font)
+        _set_font(label_run, int(theme.body_pt), bold=True, font_name=theme.font)
         skills_run = bullet_paragraph.add_run(", ".join(category.skills))
-        _set_font(skills_run, theme.body_pt, font_name=theme.font)
+        _set_font(skills_run, int(theme.body_pt), font_name=theme.font)
 
 
 def _render_resume_projects(doc: "DocxDocument", projects, heading, theme: ThemeConfig):
@@ -494,21 +494,21 @@ def _render_resume_projects(doc: "DocxDocument", projects, heading, theme: Theme
         project_paragraph = doc.add_paragraph()
         _set_space(project_paragraph, before_pt=4, after_pt=0)
         title_run = project_paragraph.add_run(project.title)
-        _set_font(title_run, theme.body_pt, bold=True, font_name=theme.font)
+        _set_font(title_run, int(theme.body_pt), bold=True, font_name=theme.font)
         if project.focus:
             focus_run = project_paragraph.add_run(f"  —  {project.focus}")
-            _set_font(focus_run, theme.body_pt, italic=True, font_name=theme.font)
+            _set_font(focus_run, int(theme.body_pt), italic=True, font_name=theme.font)
         for bullet in project.bullets:
-            _bullet(doc, bullet, body_pt=theme.body_pt, font_name=theme.font)
+            _bullet(doc, bullet, body_pt=int(theme.body_pt), font_name=theme.font)
         if project.url:
             url_paragraph = doc.add_paragraph()
             _set_space(url_paragraph, before_pt=0, after_pt=1)
             url_run = url_paragraph.add_run(project.url)
-            _set_font(url_run, theme.body_pt, italic=True, font_name=theme.font)
+            _set_font(url_run, int(theme.body_pt), italic=True, font_name=theme.font)
 
 
 def _render_resume_education_certs(doc: "DocxDocument", education, certifications,
-                                   theme: ThemeConfig):
+                                    theme: ThemeConfig):
     has_certs = bool(certifications)
     heading_text = "Education & Certificates" if has_certs else "Education"
     _section_heading(doc, heading_text, theme)
@@ -538,11 +538,11 @@ def _render_resume_education_certs(doc: "DocxDocument", education, certification
             degree = " - ".join(part for part in degree_parts if part)
             parts = [degree, edu_entry.get("institution", "")]
             text = " | ".join(part for part in parts if part)
-            _bullet(doc, text, body_pt=theme.body_pt, font_name=theme.font)
+            _bullet(doc, text, body_pt=int(theme.body_pt), font_name=theme.font)
 
 
 def build_resume(resume_json: ResumeJSON, personal: dict, education: list,
-                 output_path: str, theme: ThemeConfig = CLASSIC):
+                    output_path: str, theme: ThemeConfig = CLASSIC):
     """
     Build a resume document.
     """
@@ -569,7 +569,7 @@ def build_resume(resume_json: ResumeJSON, personal: dict, education: list,
     _render_resume_header(doc, personal, theme)
     _section_heading(doc, "Professional Summary", theme)
     summary_text = resume_json.summary.strip()
-    _body_paragraph(doc, summary_text, after_pt=2, body_pt=theme.body_pt,
+    _body_paragraph(doc, summary_text, after_pt=2, body_pt=int(theme.body_pt),
                     font_name=theme.font)
 
     _render_resume_experience(doc, resume_json.experience, right_tab_stop, theme)
@@ -596,8 +596,8 @@ COVER_PT = 12  # body font size for cover letters (larger than resume's 10pt)
 
 
 def _cover_paragraph(doc: "DocxDocument", text: str, indent: bool = False,
-                     before_pt: float = 6, after_pt: float = 6,
-                     cover_pt: int = COVER_PT, font_name: str = "Arial") -> object:
+                        before_pt: float = 6, after_pt: float = 6,
+                        cover_pt: int = COVER_PT, font_name: str = "Arial") -> object:
     """Helper to add a formatted paragraph to the cover letter."""
     # pylint: disable=too-many-arguments,too-many-positional-arguments
     paragraph = doc.add_paragraph()
@@ -610,7 +610,7 @@ def _cover_paragraph(doc: "DocxDocument", text: str, indent: bool = False,
 
 
 def _cover_bullet(doc: "DocxDocument", text: str, cover_pt: int = COVER_PT,
-                  font_name: str = "Arial"):
+                    font_name: str = "Arial"):
     bullet_paragraph = doc.add_paragraph(style="List Bullet")
     _set_space(bullet_paragraph, before_pt=0, after_pt=2)
     for run in bullet_paragraph.runs:
@@ -626,8 +626,8 @@ def _render_cover_letter_header(doc: "DocxDocument", personal: dict,
     name_paragraph = doc.add_paragraph()
     _set_space(name_paragraph, before_pt=0, after_pt=2)
     name_run = name_paragraph.add_run(personal["name"])
-    _set_font(name_run, theme.name_pt, bold=True, color=RGBColor(*theme.accent_color),
-              font_name=theme.font)
+    _set_font(name_run, int(theme.name_pt), bold=True, color=RGBColor(*theme.accent_color),
+                font_name=theme.font)
 
     loc = personal.get("location", {})
     loc_parts = [loc.get("city", ""), loc.get("region", ""), loc.get("countryCode", "")]
@@ -637,11 +637,11 @@ def _render_cover_letter_header(doc: "DocxDocument", personal: dict,
     )
     linkedin = next(
         (p.get("username", "") for p in personal.get("profiles", [])
-         if p.get("network") == "LinkedIn"), ""
+            if p.get("network") == "LinkedIn"), ""
     )
     github = next(
         (p.get("username", "") for p in personal.get("profiles", [])
-         if p.get("network") == "GitHub"), ""
+            if p.get("network") == "GitHub"), ""
     )
     line1_parts = [
         location_str,
@@ -665,7 +665,7 @@ def _render_cover_letter_header(doc: "DocxDocument", personal: dict,
 
 
 def _render_cover_letter_body(doc: "DocxDocument", cover_json: CoverLetterJSON, company: str,
-                              theme: ThemeConfig, cover_pt: int):
+                                theme: ThemeConfig, cover_pt: int):
     # Date (right-aligned)
     today = date.today().strftime("%B %d, %Y")
     date_p = doc.add_paragraph()
@@ -687,23 +687,23 @@ def _render_cover_letter_body(doc: "DocxDocument", cover_json: CoverLetterJSON, 
     if cover_json.highlights:
         intro_text = cover_json.highlights_intro or "A few highlights from my background:"
         _cover_paragraph(doc, intro_text, indent=True, before_pt=6, after_pt=2, cover_pt=cover_pt,
-                         font_name=theme.font)
+                            font_name=theme.font)
         for bullet_text in cover_json.highlights:
             _cover_bullet(doc, bullet_text, cover_pt=cover_pt, font_name=theme.font)
 
     _cover_paragraph(doc, cover_json.closing, indent=True, before_pt=8, cover_pt=cover_pt,
-                     font_name=theme.font)
+                        font_name=theme.font)
 
 
 def build_cover_letter(cover_json: CoverLetterJSON, personal: dict,
-                       company: str, _job_title: str, output_path: str,
-                       theme: ThemeConfig = CLASSIC):
+                        company: str, output_path: str,
+                        theme: ThemeConfig = CLASSIC):
     """
     Build a cover letter document.
     """
     # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-locals
     doc = Document()
-    cover_pt = theme.body_pt + 2
+    cover_pt = int(theme.body_pt) + 2
 
     for section in doc.sections:
         section.top_margin = Inches(max(theme.margin_top, 1.0))
