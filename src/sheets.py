@@ -118,6 +118,20 @@ def _find_existing_row(
     return None
 
 
+def _job_row_field_map(job_row: "JobRow") -> dict:
+    """Return the full field→value mapping for a JobRow."""
+    return {
+        "job_title": job_row.title,
+        "company": job_row.company,
+        "url": job_row.url,
+        "status": job_row.status,
+        "date_found": job_row.date_found,
+        "details": job_row.details,
+        "priority": job_row.priority,
+        "reasoning": job_row.reasoning,
+    }
+
+
 def upsert_job_row(
     config: dict,
     job_row: "JobRow",
@@ -133,17 +147,7 @@ def upsert_job_row(
     cols = config["google_sheets"]["columns"]
     headers = sheet.row_values(1)
 
-    full_field_map = {
-        "job_title": job_row.title,
-        "company": job_row.company,
-        "url": job_row.url,
-        "status": job_row.status,
-        "date_found": job_row.date_found,
-        "details": job_row.details,
-        "priority": job_row.priority,
-        "reasoning": job_row.reasoning,
-    }
-
+    full_field_map = _job_row_field_map(job_row)
     update_field_map = {k: v for k, v in full_field_map.items() if k != "date_found"}
 
     existing_row_index = _find_existing_row(sheet, headers, cols, job_row)
@@ -172,3 +176,87 @@ def upsert_job_row(
         if col_name and col_name in headers:
             row[headers.index(col_name)] = value
     sheet.append_row(row)
+
+
+def bulk_upsert_job_rows(config: dict, job_rows: "list[JobRow]") -> None:
+    """Bulk-upsert multiple job rows using a single sheet session.
+
+    Opens the sheet once, reads headers and all values once, then processes
+    every row against that in-memory snapshot.  All mutations are submitted
+    in as few API calls as possible (one batch_update + sequential appends).
+
+    Semantics match upsert_job_row:
+    - Existing row + status "Seen"  → skip (never downgrade richer statuses).
+    - Existing row + other status   → update all fields except date_found.
+    - No existing row               → append a full new row.
+    """
+    if not job_rows:
+        return
+
+    sheet = _open_sheet(config)
+    cols = config["google_sheets"]["columns"]
+    headers = sheet.row_values(1)
+    all_values = sheet.get_all_values()
+
+    header_index = {name: idx for idx, name in enumerate(headers)}
+
+    url_col = cols.get("url", "")
+    title_col = cols.get("job_title", "")
+    company_col = cols.get("company", "")
+
+    def _cell(row: list, col_name: str) -> str:
+        idx = header_index.get(col_name)
+        if idx is None:
+            return ""
+        return (row[idx] if idx < len(row) else "").strip().lower()
+
+    def _find_in_snapshot(job_row: "JobRow") -> int | None:
+        """Return 1-based row index from the pre-fetched snapshot, or None."""
+        if len(all_values) < 2:
+            return None
+        norm_url = (job_row.url or "").strip().lower()
+        norm_title = (job_row.title or "").strip().lower()
+        norm_company = (job_row.company or "").strip().lower()
+
+        if norm_url:
+            for row_idx, row in enumerate(all_values[1:], start=2):
+                if _cell(row, url_col) == norm_url:
+                    return row_idx
+
+        if norm_title and norm_company:
+            for row_idx, row in enumerate(all_values[1:], start=2):
+                if _cell(row, title_col) == norm_title and _cell(row, company_col) == norm_company:
+                    return row_idx
+
+        return None
+
+    batch_updates: list[dict] = []
+    rows_to_append: list[list] = []
+
+    for job_row in job_rows:
+        full_field_map = _job_row_field_map(job_row)
+        existing_row_index = _find_in_snapshot(job_row)
+
+        if existing_row_index is not None:
+            if job_row.status == "Seen":
+                continue  # never overwrite an existing row with a Seen annotation
+
+            update_field_map = {k: v for k, v in full_field_map.items() if k != "date_found"}
+            for field, value in update_field_map.items():
+                col_name = cols.get(field, "")
+                if col_name and col_name in header_index:
+                    col_index = header_index[col_name] + 1
+                    cell = gspread.utils.rowcol_to_a1(existing_row_index, col_index)
+                    batch_updates.append({"range": cell, "values": [[value]]})
+        else:
+            row = [""] * len(headers)
+            for field, value in full_field_map.items():
+                col_name = cols.get(field, "")
+                if col_name and col_name in header_index:
+                    row[header_index[col_name]] = value
+            rows_to_append.append(row)
+
+    if batch_updates:
+        sheet.batch_update(batch_updates)
+    for row in rows_to_append:
+        sheet.append_row(row)

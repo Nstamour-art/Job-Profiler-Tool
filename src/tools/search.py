@@ -19,7 +19,7 @@ from deepagents import create_deep_agent
 
 from src.prompts import SEARCH_SUBAGENT_SYSTEM_PROMPT
 from src.validator import validate_job_links
-from src.sheets import upsert_job_row
+from src.sheets import bulk_upsert_job_rows
 
 if TYPE_CHECKING:
     from src.providers import BaseProvider
@@ -89,20 +89,20 @@ def create_search_tool(
             sheets_cfg = cfg.get("google_sheets")
             if sheets_cfg and jobs:
                 from src.models import JobRow  # pylint: disable=import-outside-toplevel
-                for job in jobs:
-                    try:
-                        upsert_job_row(
-                            config=cfg,
-                            job_row=JobRow(
-                                title=job.get("title", ""),
-                                company=job.get("company", ""),
-                                url=job.get("url", ""),
-                                status="Seen",
-                                date_found=date.today().isoformat(),
-                            ),
-                        )
-                    except Exception:  # pylint: disable=broad-exception-caught
-                        pass  # sheet failure must never abort search
+                job_rows = [
+                    JobRow(
+                        title=job.get("title", ""),
+                        company=job.get("company", ""),
+                        url=job.get("url", ""),
+                        status="Seen",
+                        date_found=date.today().isoformat(),
+                    )
+                    for job in jobs
+                ]
+                try:
+                    bulk_upsert_job_rows(config=cfg, job_rows=job_rows)
+                except Exception:  # pylint: disable=broad-exception-caught
+                    pass  # sheet failure must never abort search
 
             return json.dumps({
                 "jobs": jobs,

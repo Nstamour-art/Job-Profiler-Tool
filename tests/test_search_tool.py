@@ -52,7 +52,7 @@ def test_search_jobs_calls_validate_job_links(sample_config):
          patch("src.tools.search.validate_job_links", return_value=[
              {"url": "https://example.com/job/1", "title": "AI Eng", "company": "Acme"}
          ]) as mock_validate, \
-         patch("src.tools.search.upsert_job_row"):
+         patch("src.tools.search.bulk_upsert_job_rows"):
         mock_agent_cls.return_value.invoke.return_value = mock_sub_result
         from src.tools.search import create_search_tool
         tool = create_search_tool(
@@ -80,7 +80,7 @@ def test_search_jobs_logs_seen_for_each_valid_job(sample_config):
 
     with patch("src.tools.search.create_deep_agent") as mock_agent_cls, \
          patch("src.tools.search.validate_job_links", return_value=jobs), \
-         patch("src.tools.search.upsert_job_row") as mock_upsert:
+         patch("src.tools.search.bulk_upsert_job_rows") as mock_upsert:
         mock_agent_cls.return_value.invoke.return_value = mock_sub_result
         from src.tools.search import create_search_tool
         tool = create_search_tool(
@@ -93,7 +93,8 @@ def test_search_jobs_logs_seen_for_each_valid_job(sample_config):
         )
         tool.invoke({"preferences_summary": "Backend engineer"})
 
-    assert mock_upsert.call_count == 3
+    mock_upsert.assert_called_once()
+    assert len(mock_upsert.call_args.kwargs["job_rows"]) == 3
 
 
 def test_search_jobs_fetches_max_jobs_plus_buffer(sample_config):
@@ -108,7 +109,7 @@ def test_search_jobs_fetches_max_jobs_plus_buffer(sample_config):
 
     with patch("src.tools.search.create_deep_agent", side_effect=fake_create_agent), \
          patch("src.tools.search.validate_job_links", return_value=[]), \
-         patch("src.tools.search.upsert_job_row"):
+         patch("src.tools.search.bulk_upsert_job_rows"):
         from src.tools.search import create_search_tool
         tool = create_search_tool(
             agent_model=MagicMock(),

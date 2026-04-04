@@ -223,3 +223,160 @@ def test_upsert_seen_does_not_overwrite_existing_generated_row(sample_config):
     # Row already exists — Seen upsert must not write anything
     mock_sheet.batch_update.assert_not_called()
     mock_sheet.append_row.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# bulk_upsert_job_rows tests
+# ---------------------------------------------------------------------------
+
+
+def test_bulk_upsert_inserts_all_new_jobs(sample_config):
+    """All jobs without existing rows are appended."""
+    headers = ["Title", "Company", "URL", "Status", "Date Found", "Details", "Priority", "Reasoning"]
+    mock_sheet = _make_mock_sheet(headers)
+
+    with patch("src.sheets._open_sheet", return_value=mock_sheet):
+        from src.sheets import bulk_upsert_job_rows
+        from src.models import JobRow
+        bulk_upsert_job_rows(
+            config=sample_config,
+            job_rows=[
+                JobRow(title="AI Engineer", company="Acme Corp", url="https://example.com/job/1",
+                       status="Seen", date_found="2026-04-02"),
+                JobRow(title="ML Engineer", company="Stripe", url="https://example.com/job/2",
+                       status="Seen", date_found="2026-04-02"),
+            ],
+        )
+
+    assert mock_sheet.append_row.call_count == 2
+    mock_sheet.batch_update.assert_not_called()
+
+
+def test_bulk_upsert_opens_sheet_once(sample_config):
+    """Sheet is opened exactly once regardless of how many jobs are processed."""
+    headers = ["Title", "Company", "URL", "Status", "Date Found"]
+    mock_sheet = _make_mock_sheet(headers)
+
+    with patch("src.sheets._open_sheet", return_value=mock_sheet) as mock_open:
+        from src.sheets import bulk_upsert_job_rows
+        from src.models import JobRow
+        bulk_upsert_job_rows(
+            config=sample_config,
+            job_rows=[
+                JobRow(title="Job A", company="Corp A", url="https://a.com/1",
+                       status="Seen", date_found="2026-04-02"),
+                JobRow(title="Job B", company="Corp B", url="https://b.com/1",
+                       status="Seen", date_found="2026-04-02"),
+                JobRow(title="Job C", company="Corp C", url="https://c.com/1",
+                       status="Seen", date_found="2026-04-02"),
+            ],
+        )
+
+    mock_open.assert_called_once()
+
+
+def test_bulk_upsert_reads_values_once(sample_config):
+    """get_all_values is called exactly once regardless of job count."""
+    headers = ["Title", "Company", "URL", "Status", "Date Found"]
+    mock_sheet = _make_mock_sheet(headers)
+
+    with patch("src.sheets._open_sheet", return_value=mock_sheet):
+        from src.sheets import bulk_upsert_job_rows
+        from src.models import JobRow
+        bulk_upsert_job_rows(
+            config=sample_config,
+            job_rows=[
+                JobRow(title="Job A", company="Corp A", url="https://a.com/1",
+                       status="Seen", date_found="2026-04-02"),
+                JobRow(title="Job B", company="Corp B", url="https://b.com/1",
+                       status="Seen", date_found="2026-04-02"),
+            ],
+        )
+
+    mock_sheet.get_all_values.assert_called_once()
+
+
+def test_bulk_upsert_skips_seen_for_existing_rows(sample_config):
+    """Seen jobs that already exist in the sheet are silently skipped."""
+    headers = ["Title", "Company", "URL", "Status", "Date Found", "Details", "Priority", "Reasoning"]
+    existing = [
+        ["AI Engineer", "Acme Corp", "https://example.com/job/1", "Generated", "2026-04-01", "desc", "8", "Strong."],
+    ]
+    mock_sheet = _make_mock_sheet(headers, existing)
+
+    with patch("src.sheets._open_sheet", return_value=mock_sheet):
+        from src.sheets import bulk_upsert_job_rows
+        from src.models import JobRow
+        bulk_upsert_job_rows(
+            config=sample_config,
+            job_rows=[
+                JobRow(title="AI Engineer", company="Acme Corp",
+                       url="https://example.com/job/1", status="Seen", date_found="2026-04-02"),
+            ],
+        )
+
+    mock_sheet.batch_update.assert_not_called()
+    mock_sheet.append_row.assert_not_called()
+
+
+def test_bulk_upsert_batches_updates_in_one_call(sample_config):
+    """Multiple jobs needing updates issue a single batch_update call."""
+    headers = ["Title", "Company", "URL", "Status", "Date Found", "Details", "Priority", "Reasoning"]
+    existing = [
+        ["Job A", "Corp A", "https://a.com/1", "Seen", "2026-04-01", "", "", ""],
+        ["Job B", "Corp B", "https://b.com/1", "Seen", "2026-04-01", "", "", ""],
+    ]
+    mock_sheet = _make_mock_sheet(headers, existing)
+
+    with patch("src.sheets._open_sheet", return_value=mock_sheet):
+        from src.sheets import bulk_upsert_job_rows
+        from src.models import JobRow
+        bulk_upsert_job_rows(
+            config=sample_config,
+            job_rows=[
+                JobRow(title="Job A", company="Corp A", url="https://a.com/1",
+                       status="Generated", date_found="2026-04-02", priority="3"),
+                JobRow(title="Job B", company="Corp B", url="https://b.com/1",
+                       status="Generated", date_found="2026-04-02", priority="5"),
+            ],
+        )
+
+    # Both updates should be combined into one batch_update call
+    mock_sheet.batch_update.assert_called_once()
+    mock_sheet.append_row.assert_not_called()
+
+
+def test_bulk_upsert_empty_list_is_noop(sample_config):
+    """Calling with an empty list must not open the sheet at all."""
+    with patch("src.sheets._open_sheet") as mock_open:
+        from src.sheets import bulk_upsert_job_rows
+        bulk_upsert_job_rows(config=sample_config, job_rows=[])
+
+    mock_open.assert_not_called()
+
+
+def test_bulk_upsert_mixed_insert_and_update(sample_config):
+    """A mix of new and existing jobs results in appends for new and batch_update for existing."""
+    headers = ["Title", "Company", "URL", "Status", "Date Found", "Details", "Priority", "Reasoning"]
+    existing = [
+        ["Job A", "Corp A", "https://a.com/1", "Seen", "2026-04-01", "", "", ""],
+    ]
+    mock_sheet = _make_mock_sheet(headers, existing)
+
+    with patch("src.sheets._open_sheet", return_value=mock_sheet):
+        from src.sheets import bulk_upsert_job_rows
+        from src.models import JobRow
+        bulk_upsert_job_rows(
+            config=sample_config,
+            job_rows=[
+                # existing — should be updated
+                JobRow(title="Job A", company="Corp A", url="https://a.com/1",
+                       status="Generated", date_found="2026-04-02", priority="2"),
+                # new — should be appended
+                JobRow(title="Job B", company="Corp B", url="https://b.com/1",
+                       status="Seen", date_found="2026-04-02"),
+            ],
+        )
+
+    mock_sheet.batch_update.assert_called_once()
+    mock_sheet.append_row.assert_called_once()
