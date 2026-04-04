@@ -95,10 +95,12 @@ def _find_existing_row(
     if len(all_values) < 2:
         return None
 
+    header_index = {name: idx for idx, name in enumerate(headers)}
+
     def _cell(row: list, col_name: str) -> str:
-        if col_name not in headers:
+        idx = header_index.get(col_name)
+        if idx is None:
             return ""
-        idx = headers.index(col_name)
         return (row[idx] if idx < len(row) else "").strip().lower()
 
     # First pass: URL match takes priority
