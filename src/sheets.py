@@ -147,6 +147,12 @@ def upsert_job_row(
     existing_row_index = _find_existing_row(sheet, headers, cols, job_row)
 
     if existing_row_index is not None:
+        # "Seen" is a search-time annotation; never overwrite a row that already
+        # exists (it may have a richer status like "Generated" with priority and
+        # reasoning that would be cleared by the empty Seen fields).
+        if job_row.status == "Seen":
+            return
+
         updates = []
         for field, value in update_field_map.items():
             col_name = cols.get(field, "")

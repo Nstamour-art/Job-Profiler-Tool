@@ -196,3 +196,30 @@ def test_upsert_job_row_handles_empty_sheet(sample_config):
 
     mock_sheet.append_row.assert_called_once()
     mock_sheet.batch_update.assert_not_called()
+
+
+def test_upsert_seen_does_not_overwrite_existing_generated_row(sample_config):
+    """A Seen upsert must not downgrade a pre-existing Generated row or clear its fields."""
+    headers = ["Title", "Company", "URL", "Status", "Date Found", "Details", "Priority", "Reasoning"]
+    existing = [
+        ["AI Engineer", "Acme Corp", "https://example.com/job/1", "Generated", "2026-04-01", "desc", "8", "Strong match."]
+    ]
+    mock_sheet = _make_mock_sheet(headers, existing)
+
+    with patch("src.sheets._open_sheet", return_value=mock_sheet):
+        from src.sheets import upsert_job_row
+        from src.models import JobRow
+        upsert_job_row(
+            config=sample_config,
+            job_row=JobRow(
+                title="AI Engineer",
+                company="Acme Corp",
+                url="https://example.com/job/1",
+                status="Seen",
+                date_found="2026-04-03",
+            ),
+        )
+
+    # Row already exists — Seen upsert must not write anything
+    mock_sheet.batch_update.assert_not_called()
+    mock_sheet.append_row.assert_not_called()
