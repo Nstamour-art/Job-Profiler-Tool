@@ -29,9 +29,23 @@ def create_generate_batch_tool(
     and 15 respectively. Sleeps between batches (not after the last batch) to
     avoid API rate limiting.
     """
-    batch_size = config.get("agent", {}).get("batch_size", 3)
-    batch_delay = config.get("agent", {}).get("batch_delay_seconds", 15)
+    def _coerce_batch_size(value, default: int) -> int:
+        try:
+            coerced = int(value)
+        except (TypeError, ValueError):
+            return default
+        return coerced if coerced >= 1 else default
 
+    def _coerce_batch_delay(value, default: int) -> float:
+        try:
+            coerced = float(value)
+        except (TypeError, ValueError):
+            return float(default)
+        return coerced if coerced >= 0 else 0.0
+
+    agent_config = config.get("agent", {})
+    batch_size = _coerce_batch_size(agent_config.get("batch_size", 3), 3)
+    batch_delay = _coerce_batch_delay(agent_config.get("batch_delay_seconds", 15), 15)
     @lc_tool
     def generate_batch(jobs: list[dict]) -> str:
         """Generate tailored resumes and cover letters for one or more job postings.
