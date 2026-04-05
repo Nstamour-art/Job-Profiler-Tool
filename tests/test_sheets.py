@@ -380,3 +380,59 @@ def test_bulk_upsert_mixed_insert_and_update(sample_config):
 
     mock_sheet.batch_update.assert_called_once()
     mock_sheet.append_row.assert_called_once()
+
+
+def test_upsert_seen_updates_existing_seen_row(sample_config):
+    """A Seen upsert against an existing Seen row should update it (not skip)."""
+    headers = ["Title", "Company", "URL", "Status", "Date Found", "Details", "Priority", "Reasoning"]
+    existing = [
+        ["AI Engineer", "Acme Corp", "https://old-url.com/job/99", "Seen", "2026-04-01", "", "", ""]
+    ]
+    mock_sheet = _make_mock_sheet(headers, existing)
+
+    with patch("src.sheets._open_sheet", return_value=mock_sheet):
+        from src.sheets import upsert_job_row
+        from src.models import JobRow
+        upsert_job_row(
+            config=sample_config,
+            job_row=JobRow(
+                title="AI Engineer",
+                company="Acme Corp",
+                url="https://new-url.com/job/1",
+                status="Seen",
+                date_found="2026-04-03",
+            ),
+        )
+
+    # Existing row is "Seen" — incoming "Seen" upsert should update it (not skip)
+    mock_sheet.batch_update.assert_called_once()
+    mock_sheet.append_row.assert_not_called()
+
+
+def test_bulk_upsert_seen_updates_existing_seen_row(sample_config):
+    """bulk: A Seen upsert against an existing Seen row should update it (not skip)."""
+    headers = ["Title", "Company", "URL", "Status", "Date Found", "Details", "Priority", "Reasoning"]
+    existing = [
+        ["AI Engineer", "Acme Corp", "https://old-url.com/job/99", "Seen", "2026-04-01", "", "", ""]
+    ]
+    mock_sheet = _make_mock_sheet(headers, existing)
+
+    with patch("src.sheets._open_sheet", return_value=mock_sheet):
+        from src.sheets import bulk_upsert_job_rows
+        from src.models import JobRow
+        bulk_upsert_job_rows(
+            config=sample_config,
+            job_rows=[
+                JobRow(
+                    title="AI Engineer",
+                    company="Acme Corp",
+                    url="https://new-url.com/job/1",
+                    status="Seen",
+                    date_found="2026-04-03",
+                ),
+            ],
+        )
+
+    # Existing row is "Seen" — incoming "Seen" upsert should update it (not skip)
+    mock_sheet.batch_update.assert_called_once()
+    mock_sheet.append_row.assert_not_called()

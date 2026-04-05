@@ -31,8 +31,10 @@ def create_resume_tools(resume_path: str):
             The section content as a YAML string, or an error message.
         """
         if section not in VALID_SECTIONS:
-            return f"Invalid section '{section}'. Valid sections: \
-                {', '.join(sorted(VALID_SECTIONS))}"
+            return (
+                f"Invalid section '{section}'. Valid sections: "
+                f"{', '.join(sorted(VALID_SECTIONS))}"
+            )
         with open(resume_path, encoding="utf-8") as f:
             resume = yaml.safe_load(f)
         content = resume.get(section, [])
@@ -53,8 +55,10 @@ def create_resume_tools(resume_path: str):
             A confirmation message or an error message.
         """
         if section not in VALID_SECTIONS:
-            return f"Invalid section '{section}'. Valid sections: \
-                {', '.join(sorted(VALID_SECTIONS))}"
+            return (
+                f"Invalid section '{section}'. Valid sections: "
+                f"{', '.join(sorted(VALID_SECTIONS))}"
+            )
         try:
             parsed = yaml.safe_load(new_content)
         except yaml.YAMLError as e:
