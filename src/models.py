@@ -88,6 +88,11 @@ class SuggestedRoles(BaseModel):
     roles: list[SuggestedRole]
 
 
+class JobSummary(BaseModel):
+    """Plain-English summary of a job posting returned by the lookup tool."""
+    summary: str
+
+
 class JobOptions(BaseModel):
     """Configuration options for a single job processing run."""
     resume_only: bool = False
