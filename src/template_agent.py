@@ -183,7 +183,8 @@ def run_template_wizard(config: dict, provider_name: str) -> ThemeConfig:
         ui.print_error("Please type 'yes', 'edit', or 'skip'.")
 
     # Write template.yaml — store the TemplateOverrides fields (English strings, not RGB)
-    final_overrides = current_overrides.model_dump(exclude_defaults=True) if current_overrides else {}
+    final_overrides = current_overrides.model_dump(exclude_defaults=True) \
+        if current_overrides else {}
 
     with open(template_path, "w", encoding="utf-8") as f:
         yaml.dump({"theme": base.name, "overrides": final_overrides}, f, allow_unicode=True)

@@ -48,7 +48,7 @@ class LocalOllamaProvider(BaseProvider):
             format="json",
             options={"temperature": temperature},
         )
-        return str(response.response)
+        return response.response or ""
 
 
 # ---------------------------------------------------------------------------

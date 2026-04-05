@@ -10,6 +10,7 @@ from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 import yaml as _yaml
+from pydantic import ValidationError as _PydanticValidationError
 
 from src import ui
 from src.scraper import scrape_job, ScraperError
@@ -17,11 +18,12 @@ from src.llm import parse_job_description, generate_resume, generate_cover_lette
 from src.document import build_resume, build_cover_letter
 from src.debug import log_scraped, log_job_details, log_resume, log_cover_letter, log_output_folder
 from src.themes import ThemeConfig, CLASSIC, PRESETS, merge_overrides, TemplateOverrides
-from src.sheets import append_job_row
+from src.sheets import upsert_job_row
 from src.models import Outcome
 
 if TYPE_CHECKING:
-    from src.models import ResumeJSON, JobDetails, JobOptions, PipelineContext, PipelineResults, ProviderSuite
+    from src.models import ResumeJSON, JobDetails, \
+        JobOptions, PipelineContext, PipelineResults, ProviderSuite
     from src.providers import BaseProvider
 
 
@@ -60,7 +62,7 @@ def _load_theme(template_path: str) -> ThemeConfig:
         return base
     except FileNotFoundError:
         return CLASSIC
-    except (AttributeError, TypeError, _yaml.YAMLError):
+    except (AttributeError, TypeError, _yaml.YAMLError, _PydanticValidationError):
         return CLASSIC
 
 
@@ -144,7 +146,6 @@ def _save_documents(
             cover_json=results.cover_json,
             personal=ctx.resume["basics"],
             company=company,
-            _job_title=title,
             output_path=cover_path,
             theme=theme,
         )
@@ -179,7 +180,7 @@ def process_job(
 ) -> tuple[str, dict, "ResumeJSON | None", "Outcome"]:
     """
     Full pipeline for one job:
-      scrape (or use cached details) → parse → LLM resume → LLM cover letter → write docx
+        scrape (or use cached details) → parse → LLM resume → LLM cover letter → write docx
     Returns (output_directory_path, job_data, resume_json, sheet_outcome).
     """
     from src.models import PipelineContext, JobOptions  # pylint: disable=import-outside-toplevel
@@ -254,7 +255,7 @@ def _log_to_sheet(config: dict, job_data: dict, job_details: "JobDetails", resul
             priority=priority,
             reasoning=reasoning,
         )
-        append_job_row(config=config, job_row=job_row)
+        upsert_job_row(config=config, job_row=job_row)
         return Outcome(success=True, message="Job logged to Google Sheets.")
     except Exception as exc:  # pylint: disable=broad-exception-caught
         return Outcome(success=False, message=f"Sheet logging failed: {exc}")

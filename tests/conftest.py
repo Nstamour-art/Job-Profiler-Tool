@@ -38,6 +38,9 @@ def sample_config():
         "agent": {
             "max_jobs": 10,
             "memory_bank": "",
+            "search_buffer": 5,
+            "batch_size": 3,
+            "batch_delay_seconds": 15,
         },
     }
 

@@ -338,7 +338,9 @@ def thinking_spinner(message: str = "Thinking…") -> Generator[None, None, None
 
     stop_event = threading.Event()
 
-    with console.status(f"[cyan]{random.choice(_THINKING_PHRASES)}[/cyan]", spinner="dots") as status:
+    with console.status(f"[cyan]{random.choice(_THINKING_PHRASES)}[/cyan]", \
+        spinner="dots") as status:
+        
         def _rotate() -> None:
             number = float(random.randint(3, 6))
             while not stop_event.wait(number):

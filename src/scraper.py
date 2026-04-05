@@ -137,31 +137,30 @@ def scrape_job(url: str) -> dict:
         page = context.new_page()
 
         try:
-            page.goto(url, wait_until="domcontentloaded", timeout=30000)
-        except PlaywrightTimeoutError as e:
-            browser.close()
-            raise ScraperError(f"Timed out loading {url}: {e}") from e
-
-        # Give JS-rendered pages a moment to settle
-        try:
-            page.wait_for_load_state("networkidle", timeout=5000)
-        except PlaywrightTimeoutError:
-            pass  # not all pages reach networkidle; proceed anyway
-
-        _dismiss_modals(page)
-
-        # Try targeted content selectors; fall back to full body text
-        el = _try_selectors(page, _CONTENT_SELECTORS)
-        if el:
-            raw_text = el.inner_text()
-        else:
             try:
-                raw_text = page.inner_text("body")
-            except Exception as e:  # pylint: disable=broad-exception-caught
-                browser.close()
-                raise ScraperError(f"Could not extract page text from {url}: {e}") from e
+                page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            except PlaywrightTimeoutError as e:
+                raise ScraperError(f"Timed out loading {url}: {e}") from e
 
-        browser.close()
+            # Give JS-rendered pages a moment to settle
+            try:
+                page.wait_for_load_state("networkidle", timeout=5000)
+            except PlaywrightTimeoutError:
+                pass  # not all pages reach networkidle; proceed anyway
+
+            _dismiss_modals(page)
+
+            # Try targeted content selectors; fall back to full body text
+            el = _try_selectors(page, _CONTENT_SELECTORS)
+            if el:
+                raw_text = el.inner_text()
+            else:
+                try:
+                    raw_text = page.inner_text("body")
+                except Exception as e:  # pylint: disable=broad-exception-caught
+                    raise ScraperError(f"Could not extract page text from {url}: {e}") from e
+        finally:
+            browser.close()
 
     description = _clean_text(raw_text)
     if not description:

@@ -120,8 +120,9 @@ def parse_job_description(
     prompt = f"""JOB TITLE (from URL/sheet): {job.get('title', job.get('job_title', ''))}
 COMPANY (from URL/sheet): {job.get('company', '')}
 
-RAW PAGE CONTENT:
+--- BEGIN UNTRUSTED CONTENT ---
 {job['description']}
+--- END UNTRUSTED CONTENT ---
 """
     return _call_with_retry(
         JobDetails, provider, config["llm"], JOB_PARSER_SYSTEM_PROMPT, prompt, parser_models
@@ -132,7 +133,9 @@ def generate_resume(
     job_details: JobDetails, resume: dict, config: dict, provider: BaseProvider, models: list[str]
 ) -> ResumeJSON:
     """Produce a tailored ResumeJSON for the given job."""
-    prompt = f"""{_format_job_details(job_details)}
+    prompt = f"""--- BEGIN UNTRUSTED CONTENT ---
+{_format_job_details(job_details)}
+--- END UNTRUSTED CONTENT ---
 
 ---
 
@@ -153,7 +156,9 @@ def generate_cover_letter(
     models: list[str],
 ) -> CoverLetterJSON:
     """Produce a tailored CoverLetterJSON."""
-    prompt = f"""{_format_job_details(job_details)}
+    prompt = f"""--- BEGIN UNTRUSTED CONTENT ---
+{_format_job_details(job_details)}
+--- END UNTRUSTED CONTENT ---
 
 ---
 

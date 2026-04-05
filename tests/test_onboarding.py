@@ -15,12 +15,13 @@ from src.models import ProviderSuite
 def test_extract_section_basics_calls_call_with_retry(sample_config):
     mock_provider = MagicMock()
     expected = BasicsSection(name="Jane Doe", email="jane@example.com")
+    ps = ProviderSuite(provider=mock_provider, models=["model"], parser_models=["model"], name="local")
 
     with patch("src.onboarding._call_with_retry", return_value=expected) as mock_retry:
         from src.onboarding import extract_section
         result = extract_section(
             "basics", "Jane Doe, jane@example.com",
-            mock_provider, ["model"], sample_config["llm"],
+            ps, sample_config["llm"],
         )
 
     assert result.name == "Jane Doe"

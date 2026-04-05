@@ -72,3 +72,74 @@ def test_process_job_uses_classic_when_no_template_yaml(tmp_path, monkeypatch): 
 
     assert captured_theme.get("theme") is not None
     assert captured_theme["theme"].name == "classic"
+
+
+def test_load_theme_returns_classic_on_pydantic_validation_error(tmp_path):
+    """_load_theme must catch Pydantic ValidationError and fall back to CLASSIC."""
+    import yaml as _yaml
+    template_path = tmp_path / "template.yaml"
+    # Valid YAML but invalid Pydantic: overrides contains a bad type
+    template_path.write_text(
+        _yaml.dump({"theme": "modern", "overrides": {"body_pt": "not-a-number"}}),
+        encoding="utf-8",
+    )
+
+    from src.pipeline import _load_theme
+    from src.themes import CLASSIC
+    result = _load_theme(str(template_path))
+    assert result.name == CLASSIC.name
+
+
+def test_parse_job_description_wraps_content_in_delimiters(sample_config):
+    """parse_job_description must wrap scraped content in untrusted-content delimiters."""
+    captured_prompt = {}
+
+    def fake_call_with_retry(model_class, provider, llm_cfg, system, prompt, models):
+        captured_prompt["value"] = prompt
+        from src.models import JobDetails
+        return JobDetails(
+            company="Acme", title="AI Engineer", seniority="Senior",
+            industry="SaaS", required_skills=[], preferred_skills=[],
+            responsibilities=[], culture_signals=[], salary_range=""
+        )
+
+    with patch("src.llm._call_with_retry", side_effect=fake_call_with_retry):
+        from src.llm import parse_job_description
+        job = {"title": "AI Engineer", "company": "Acme", "description": "You will build AI systems."}
+        parse_job_description(job, sample_config, MagicMock(), ["model"])
+
+    assert "--- BEGIN UNTRUSTED CONTENT ---" in captured_prompt["value"]
+    assert "--- END UNTRUSTED CONTENT ---" in captured_prompt["value"]
+    assert "You will build AI systems." in captured_prompt["value"]
+
+
+def test_generate_resume_wraps_job_details_in_delimiters(sample_config, sample_resume):
+    """generate_resume must wrap job details in untrusted-content delimiters."""
+    captured = {}
+
+    def fake_retry(model_class, provider, llm_cfg, system, prompt, models):
+        captured["prompt"] = prompt
+        from src.models import ResumeJSON
+        return ResumeJSON(
+            summary="Test summary",
+            skill_categories=[],
+            experience=[],
+            projects_section_heading="Projects",
+            projects=[],
+            certifications=[],
+            priority=5,
+            priority_reasoning="Test",
+        )
+
+    with patch("src.llm._call_with_retry", side_effect=fake_retry):
+        from src.llm import generate_resume
+        from src.models import JobDetails
+        job = JobDetails(
+            company="Acme", title="AI Engineer", seniority="Senior",
+            industry="SaaS", required_skills=["Python"], preferred_skills=[],
+            responsibilities=["Build things"], culture_signals=[], salary_range=""
+        )
+        generate_resume(job, sample_resume, sample_config, MagicMock(), ["model"])
+
+    assert "--- BEGIN UNTRUSTED CONTENT ---" in captured["prompt"]
+    assert "--- END UNTRUSTED CONTENT ---" in captured["prompt"]

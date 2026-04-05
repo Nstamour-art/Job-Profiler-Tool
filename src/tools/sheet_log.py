@@ -11,7 +11,7 @@ from datetime import date
 
 from langchain_core.tools import tool
 
-from src.sheets import append_job_row
+from src.sheets import upsert_job_row
 
 
 def create_sheet_log_tool(config: dict):
@@ -39,7 +39,7 @@ def create_sheet_log_tool(config: dict):
                 status=status,
                 date_found=date.today().isoformat(),
             )
-            append_job_row(config=config, job_row=job_row)
+            upsert_job_row(config=config, job_row=job_row)
             return f"Logged '{title}' at {company} to sheet (Status: {status})."
         except Exception as exc:  # pylint: disable=broad-exception-caught
             return f"Sheet logging failed: {exc}"

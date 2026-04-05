@@ -72,21 +72,56 @@ def update_status(config: dict, row: int, status: str) -> None:
     update_row(config, row, status=status)
 
 
-def append_job_row(
-    config: dict,
+def _find_existing_row(
+    sheet,
+    headers: list[str],
+    cols: dict,
     job_row: "JobRow",
-) -> None:
-    """Append a new job row to the sheet.
+) -> tuple[int, list] | None:
+    """Return a ``(row_index, row_data)`` tuple for the first matching row, or None.
 
-    Aligns values to the sheet's header row.
-    If a row with a matching URL already exists, updates it in-place instead of appending.
-    Skips any column not present in the sheet.
+    Matches on: URL OR (company AND title both match).
+    Reads all values in a single API call to minimise round-trips.
+    row_index is 1-based (row 1 = header).  row_data is the raw list from the sheet.
     """
-    sheet = _open_sheet(config)
-    cols = config["google_sheets"]["columns"]
-    headers = sheet.row_values(1)
+    url_col = cols.get("url", "")
+    title_col = cols.get("job_title", "")
+    company_col = cols.get("company", "")
 
-    field_map = {
+    norm_url = (job_row.url or "").strip().lower()
+    norm_title = (job_row.title or "").strip().lower()
+    norm_company = (job_row.company or "").strip().lower()
+
+    all_values = sheet.get_all_values()
+    if len(all_values) < 2:
+        return None
+
+    header_index = {name: idx for idx, name in enumerate(headers)}
+
+    def _cell(row: list, col_name: str) -> str:
+        idx = header_index.get(col_name)
+        if idx is None:
+            return ""
+        return (row[idx] if idx < len(row) else "").strip().lower()
+
+    # First pass: URL match takes priority
+    if norm_url:
+        for row_idx, row in enumerate(all_values[1:], start=2):
+            if _cell(row, url_col) == norm_url:
+                return row_idx, row
+
+    # Second pass: company + title match as fallback
+    if norm_title and norm_company:
+        for row_idx, row in enumerate(all_values[1:], start=2):
+            if _cell(row, title_col) == norm_title and _cell(row, company_col) == norm_company:
+                return row_idx, row
+
+    return None
+
+
+def _job_row_field_map(job_row: "JobRow") -> dict:
+    """Return the full field→value mapping for a JobRow."""
+    return {
         "job_title": job_row.title,
         "company": job_row.company,
         "url": job_row.url,
@@ -97,22 +132,45 @@ def append_job_row(
         "reasoning": job_row.reasoning,
     }
 
-    # Check for an existing row with the same URL and update it instead of duplicating.
-    url_col_name = cols.get("url", "")
-    existing_row_index: int | None = None
-    # Only attempt URL-based matching when the job's URL is non-empty after stripping.
-    normalized_url = (job_row.url or "").strip()
-    if normalized_url and url_col_name and url_col_name in headers:
-        url_col_index = headers.index(url_col_name) + 1  # 1-based
-        url_values = sheet.col_values(url_col_index)
-        for i, cell_value in enumerate(url_values[1:], start=2):  # skip header row
-            if (cell_value or "").strip() == normalized_url:
-                existing_row_index = i
-                break
 
-    if existing_row_index is not None:
+def upsert_job_row(
+    config: dict,
+    job_row: "JobRow",
+) -> None:
+    """Insert or update a job row in the sheet.
+
+    Match strategy: URL matches OR (company + title both match).
+    On insert: all fields including date_found are written.
+    On update: all fields except date_found are written (preserve original search date).
+    Skips any column not present in the sheet.
+    """
+    sheet = _open_sheet(config)
+    cols = config["google_sheets"]["columns"]
+    headers = sheet.row_values(1)
+
+    full_field_map = _job_row_field_map(job_row)
+    update_field_map = {k: v for k, v in full_field_map.items() if k != "date_found"}
+
+    match = _find_existing_row(sheet, headers, cols, job_row)
+
+    if match is not None:
+        existing_row_index, existing_row_data = match
+        # "Seen" is a search-time annotation; avoid overwriting a richer existing
+        # row state like "Generated" with sparse Seen data.
+        if job_row.status == "Seen":
+            header_index = {name: idx for idx, name in enumerate(headers)}
+            status_col_name = cols.get("status", "")
+            status_idx = header_index.get(status_col_name)
+            existing_status = (
+                existing_row_data[status_idx]
+                if status_idx is not None and status_idx < len(existing_row_data)
+                else ""
+            ).strip()
+            if existing_status == "Generated":
+                return
+
         updates = []
-        for field, value in field_map.items():
+        for field, value in update_field_map.items():
             col_name = cols.get(field, "")
             if col_name and col_name in headers:
                 col_index = headers.index(col_name) + 1
@@ -123,9 +181,104 @@ def append_job_row(
         return
 
     row = [""] * len(headers)
-    for field, value in field_map.items():
+    for field, value in full_field_map.items():
         col_name = cols.get(field, "")
         if col_name and col_name in headers:
             row[headers.index(col_name)] = value
-
     sheet.append_row(row)
+
+
+def bulk_upsert_job_rows(config: dict, job_rows: "list[JobRow]") -> None:
+    """Bulk-upsert multiple job rows using a single sheet session.
+
+    Opens the sheet once, reads headers and all values once, then processes
+    every row against that in-memory snapshot.  All mutations are submitted
+    in as few API calls as possible (one batch_update + sequential appends).
+
+    Semantics match upsert_job_row:
+    - Existing row + status "Seen" + existing is "Generated" → skip (don't downgrade).
+    - Existing row + status "Seen" + existing is not "Generated" → update fields.
+    - Existing row + other status   → update all fields except date_found.
+    - No existing row               → append a full new row.
+    """
+    if not job_rows:
+        return
+
+    sheet = _open_sheet(config)
+    cols = config["google_sheets"]["columns"]
+    headers = sheet.row_values(1)
+    all_values = sheet.get_all_values()
+
+    header_index = {name: idx for idx, name in enumerate(headers)}
+
+    url_col = cols.get("url", "")
+    title_col = cols.get("job_title", "")
+    company_col = cols.get("company", "")
+
+    def _cell(row: list, col_name: str) -> str:
+        idx = header_index.get(col_name)
+        if idx is None:
+            return ""
+        return (row[idx] if idx < len(row) else "").strip().lower()
+
+    def _find_in_snapshot(job_row: "JobRow") -> tuple[int, list] | None:
+        """Return ``(1-based row index, row_data)`` from the pre-fetched snapshot, or None."""
+        if len(all_values) < 2:
+            return None
+        norm_url = (job_row.url or "").strip().lower()
+        norm_title = (job_row.title or "").strip().lower()
+        norm_company = (job_row.company or "").strip().lower()
+
+        if norm_url:
+            for row_idx, row in enumerate(all_values[1:], start=2):
+                if _cell(row, url_col) == norm_url:
+                    return row_idx, row
+
+        if norm_title and norm_company:
+            for row_idx, row in enumerate(all_values[1:], start=2):
+                if _cell(row, title_col) == norm_title and _cell(row, company_col) == norm_company:
+                    return row_idx, row
+
+        return None
+
+    status_col_name = cols.get("status", "")
+    status_col_idx = header_index.get(status_col_name)
+
+    batch_updates: list[dict] = []
+    rows_to_append: list[list] = []
+
+    for job_row in job_rows:
+        full_field_map = _job_row_field_map(job_row)
+        match = _find_in_snapshot(job_row)
+
+        if match is not None:
+            existing_row_index, existing_row_data = match
+            if job_row.status == "Seen":
+                # Only skip if the existing row already has a richer "Generated" status
+                existing_status = (
+                    existing_row_data[status_col_idx]
+                    if status_col_idx is not None and status_col_idx < len(existing_row_data)
+                    else ""
+                ).strip()
+                if existing_status == "Generated":
+                    continue
+
+            update_field_map = {k: v for k, v in full_field_map.items() if k != "date_found"}
+            for field, value in update_field_map.items():
+                col_name = cols.get(field, "")
+                if col_name and col_name in header_index:
+                    col_index = header_index[col_name] + 1
+                    cell = gspread.utils.rowcol_to_a1(existing_row_index, col_index)
+                    batch_updates.append({"range": cell, "values": [[value]]})
+        else:
+            row = [""] * len(headers)
+            for field, value in full_field_map.items():
+                col_name = cols.get(field, "")
+                if col_name and col_name in header_index:
+                    row[header_index[col_name]] = value
+            rows_to_append.append(row)
+
+    if batch_updates:
+        sheet.batch_update(batch_updates)
+    for row in rows_to_append:
+        sheet.append_row(row)

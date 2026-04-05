@@ -90,6 +90,29 @@ def test_suggest_roles_returns_formatted_string(tmp_path):
     assert "Mid-level" in result
 
 
+def test_suggest_roles_returns_message_for_empty_roles(tmp_path):
+    """Tool returns a clear message when LLM returns an empty roles list."""
+    import yaml
+    from src.models import SuggestedRoles
+
+    resume = {"basics": {"name": "Jane"}}
+    resume_path = tmp_path / "resume.yaml"
+    resume_path.write_text(yaml.dump(resume))
+
+    config = {
+        "paths": {"resume_yaml": str(resume_path)},
+        "llm": {"temperature": 0.3, "max_retries": 1, "model": "m", "parser_model": "m"},
+    }
+    empty_result = SuggestedRoles(seniority_level="Unknown", roles=[])
+
+    with patch("src.tools.suggest_roles._call_with_retry", return_value=empty_result):
+        from src.tools.suggest_roles import create_suggest_roles_tool
+        tool = create_suggest_roles_tool(config, MagicMock(), ["parser-model"])
+        result = tool.invoke({})
+
+    assert "No role suggestions" in result
+
+
 def test_suggest_roles_handles_llm_error(tmp_path):
     """Tool returns a plain error string instead of raising when LLM fails."""
     import yaml
@@ -133,7 +156,7 @@ def test_build_agent_includes_suggest_roles_tool():
     with patch("src.agent.init_chat_model", return_value=MagicMock()), \
          patch("src.agent.create_deep_agent") as mock_create, \
          patch("src.agent.create_search_tool", return_value=MagicMock(name="search_jobs")), \
-         patch("src.agent.create_generate_tool", return_value=MagicMock(name="generate_documents")), \
+         patch("src.agent.create_generate_batch_tool", return_value=MagicMock(name="generate_batch")), \
          patch("src.agent.create_resume_tools", return_value=(MagicMock(), MagicMock())), \
          patch("src.agent.create_suggest_roles_tool", return_value=MagicMock(name="suggest_roles")) as mock_suggest, \
          patch.dict(os.environ, {"TAVILY_API_KEY": "test"}):
