@@ -97,3 +97,37 @@ def test_lookup_wraps_snippet_in_delimiters(sample_config):
     assert "--- BEGIN UNTRUSTED CONTENT ---" in captured["prompt"]
     assert "--- END UNTRUSTED CONTENT ---" in captured["prompt"]
     assert "raw page text here" in captured["prompt"]
+
+
+# ---------------------------------------------------------------------------
+# Agent wiring
+# ---------------------------------------------------------------------------
+
+def test_agent_includes_lookup_tool():
+    """build_agent must wire lookup_job_details into the tool list."""
+    import os
+
+    config = {
+        "provider": "local",
+        "llm": {"temperature": 0.3, "max_retries": 1, "model": "llama3.2:latest",
+                "parser_model": "llama3.2:latest"},
+        "paths": {"resume_yaml": "resume.yaml", "template_yaml": "template.yaml",
+                  "output_dir": "output", "credentials": "creds.json"},
+        "agent": {"max_jobs": 10, "memory_bank": "", "memory_model": ""},
+    }
+    resume = {"basics": {"name": "Test User", "location": "Remote"}}
+
+    with patch("src.agent.init_chat_model", return_value=MagicMock()), \
+         patch("src.agent.create_deep_agent") as mock_create, \
+         patch("src.agent.create_search_tool", return_value=MagicMock(name="search_jobs")), \
+         patch("src.agent.create_generate_batch_tool", return_value=MagicMock(name="generate_batch")), \
+         patch("src.agent.create_resume_tools", return_value=(MagicMock(), MagicMock())), \
+         patch("src.agent.create_suggest_roles_tool", return_value=MagicMock(name="suggest_roles")), \
+         patch("src.agent.create_lookup_tool", return_value=MagicMock(name="lookup_job_details")) as mock_lookup, \
+         patch.dict(os.environ, {"TAVILY_API_KEY": "test"}):
+        from src.agent import build_agent
+        build_agent(config, resume, "local", "")
+
+    mock_create.assert_called_once()
+    tools_passed = mock_create.call_args.kwargs["tools"]
+    assert mock_lookup.return_value in tools_passed

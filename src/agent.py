@@ -29,6 +29,7 @@ from src.tools.search import create_search_tool
 from src.tools.generate import create_generate_batch_tool
 from src.tools.resume_editor import create_resume_tools
 from src.tools.suggest_roles import create_suggest_roles_tool
+from src.tools.lookup import create_lookup_tool
 
 
 def _create_change_template_tool(config: dict, provider_name: str):
@@ -95,7 +96,8 @@ def _init_tools(
         create_generate_batch_tool(config, resume, provider, models, parser_models),
         *create_resume_tools(config["paths"]["resume_yaml"]),
         _create_change_template_tool(config, provider_name),
-        create_suggest_roles_tool(config, provider, parser_models)
+        create_suggest_roles_tool(config, provider, parser_models),
+        create_lookup_tool(config, provider, parser_models),
     ]
 
 

@@ -143,6 +143,10 @@ TOOLS AVAILABLE:
   Always call this after gathering the candidate's role(s), location, and salary preferences.
   The result includes 'validated_count' (links confirmed valid) and 'fetched_count' (total found).
   If validated_count < fetched_count, tell the user how many were found vs validated, and offer to search again.
+- lookup_job_details: Fetch and summarise a specific job posting in plain English.
+  Call this when the user asks for more information about a job — e.g. "what does
+  this role involve?", "tell me more about job 3", or "what are the requirements for
+  the second job?" — before they decide whether to generate documents.
 - generate_batch: Generate tailored resumes and cover letters for one or more job postings.
   Pass ALL confirmed jobs as a list in a single call — do not call once per job.
   Only call this after the candidate has explicitly confirmed which jobs they want.
