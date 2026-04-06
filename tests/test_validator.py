@@ -100,6 +100,21 @@ def test_heuristic_score_penalises_search_result_urls():
     assert score_search <= 3  # search result URL causes penalty
 
 
+def test_heuristic_score_penalises_dice_search_urls():
+    """Dice encodes searches as /jobs/q-keyword-l-location-jobs — must be penalised."""
+    from src.validator import _heuristic_score
+    text = (
+        "Acme Corp is hiring a Senior AI Engineer. "
+        "Responsibilities include building ML pipelines. "
+        "Qualifications: 5+ years Python. Apply now. " * 20
+    )
+    score_posting = _heuristic_score(text, title="Senior AI Engineer", company="Acme Corp",
+                                     url="https://www.dice.com/jobs/detail/12345-senior-ai-engineer")
+    score_search = _heuristic_score(text, title="Senior AI Engineer", company="Acme Corp",
+                                    url="https://www.dice.com/jobs/q-senior+ai+engineer-l-Remote-jobs")
+    assert score_search < score_posting
+
+
 # ---------------------------------------------------------------------------
 # validate_job_links
 # ---------------------------------------------------------------------------

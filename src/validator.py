@@ -42,6 +42,7 @@ _SEARCH_RESULT_PATTERNS = (
     "q=",
     "/jobs?",
     "/careers/search",
+    "/jobs/q-",  # Dice search URL slug format (e.g. /jobs/q-engineer-l-Remote-jobs)
 )
 
 
