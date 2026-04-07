@@ -129,6 +129,7 @@ def test_validate_job_links_drops_dead_urls(sample_config):
         return "dead" not in url
 
     with patch("src.validator._is_url_live", side_effect=fake_is_live), \
+         patch("src.validator._is_safe_url", return_value=True), \
          patch("src.validator.fetch_page_snippet", return_value="Acme is hiring AI Engineer. Responsibilities qualifications apply." * 10), \
          patch("src.validator._heuristic_score", return_value=4):
         from src.validator import validate_job_links
@@ -142,6 +143,7 @@ def test_validate_job_links_caps_at_max_jobs(sample_config):
     jobs = [{"url": f"https://example.com/job/{i}", "title": "Eng", "company": "Corp"} for i in range(10)]
 
     with patch("src.validator._is_url_live", return_value=True), \
+         patch("src.validator._is_safe_url", return_value=True), \
          patch("src.validator.fetch_page_snippet", return_value="Corp Eng responsibilities qualifications apply apply apply" * 10), \
          patch("src.validator._heuristic_score", return_value=4):
         from src.validator import validate_job_links
@@ -154,6 +156,7 @@ def test_validate_job_links_uses_ai_for_uncertain_score(sample_config):
     jobs = [{"url": "https://example.com/job/1", "title": "AI Engineer", "company": "Acme"}]
 
     with patch("src.validator._is_url_live", return_value=True), \
+         patch("src.validator._is_safe_url", return_value=True), \
          patch("src.validator.fetch_page_snippet", return_value="Some page content."), \
          patch("src.validator._heuristic_score", return_value=1), \
          patch("src.validator._ask_parser", return_value=True) as mock_ai:
@@ -168,6 +171,7 @@ def test_validate_job_links_drops_if_ai_says_no(sample_config):
     jobs = [{"url": "https://example.com/job/1", "title": "AI Engineer", "company": "Acme"}]
 
     with patch("src.validator._is_url_live", return_value=True), \
+         patch("src.validator._is_safe_url", return_value=True), \
          patch("src.validator.fetch_page_snippet", return_value="Some page content."), \
          patch("src.validator._heuristic_score", return_value=1), \
          patch("src.validator._ask_parser", return_value=False):
@@ -182,6 +186,7 @@ def test_validate_job_links_skips_url_when_snippet_is_none(sample_config):
     jobs = [{"url": "https://example.com/job/1", "title": "AI Engineer", "company": "Acme"}]
 
     with patch("src.validator._is_url_live", return_value=True), \
+         patch("src.validator._is_safe_url", return_value=True), \
          patch("src.validator.fetch_page_snippet", return_value=None):
         from src.validator import validate_job_links
         result = validate_job_links(jobs, sample_config, MagicMock(), ["model"], max_jobs=10)
@@ -203,3 +208,194 @@ def test_ask_parser_returns_true_on_llm_exception(sample_config):
         )
 
     assert result is True
+
+
+# ---------------------------------------------------------------------------
+# _is_blocked_domain
+# ---------------------------------------------------------------------------
+
+def test_is_blocked_domain_exact_match():
+    from src.validator import _is_blocked_domain
+    assert _is_blocked_domain("https://jooble.org/jobs/123") is True
+
+
+def test_is_blocked_domain_subdomain_match():
+    """Subdomains of blocked domains (e.g. jobs.jooble.org) are also blocked."""
+    from src.validator import _is_blocked_domain
+    assert _is_blocked_domain("https://jobs.jooble.org/view/456") is True
+
+
+def test_is_blocked_domain_www_prefix_stripped_correctly():
+    """www.jooble.org must match even though www. is stripped first."""
+    from src.validator import _is_blocked_domain
+    assert _is_blocked_domain("https://www.jooble.org/jobs/1") is True
+
+
+def test_is_blocked_domain_preserves_valid_w_prefix():
+    """w.example.com must NOT be treated as example.com (lstrip bug guard)."""
+    from src.validator import _is_blocked_domain
+    # w.example.com is not on the blocklist — it must NOT be corrupted to example.com
+    assert _is_blocked_domain("https://w.example.com/job/1") is False
+
+
+def test_is_blocked_domain_single_label_blocked():
+    """Single-label hostnames like 'localhost' are always blocked."""
+    from src.validator import _is_blocked_domain
+    assert _is_blocked_domain("http://localhost/admin") is True
+
+
+def test_is_blocked_domain_reputable_site_not_blocked():
+    from src.validator import _is_blocked_domain
+    assert _is_blocked_domain("https://boards.greenhouse.io/acme/jobs/123") is False
+
+
+def test_is_blocked_domain_unparseable_url_is_blocked():
+    from src.validator import _is_blocked_domain
+    assert _is_blocked_domain("not-a-url-at-all") is True
+
+
+# ---------------------------------------------------------------------------
+# _is_multi_listing_page — URL used for known-aggregator detection
+# ---------------------------------------------------------------------------
+
+def test_is_multi_listing_page_known_domain():
+    """hnhiring.com must be flagged even if the text snippet looks clean."""
+    from src.validator import _is_multi_listing_page
+    assert _is_multi_listing_page("Some hiring thread content.", "https://hnhiring.com/october") is True
+
+
+def test_is_multi_listing_page_hn_thread():
+    """news.ycombinator.com 'Who's Hiring' threads are multi-listing."""
+    from src.validator import _is_multi_listing_page
+    assert _is_multi_listing_page("Who is Hiring?", "https://news.ycombinator.com/item?id=12345") is True
+
+
+def test_is_multi_listing_page_text_signal():
+    """The text-based signal still works for unlisted aggregators."""
+    from src.validator import _is_multi_listing_page
+    text = "apply hiring " * 20 + "x" * 2000  # dense apply/hiring + long text
+    assert _is_multi_listing_page(text, "https://unknown-aggregator.example.com/jobs") is True
+
+
+def test_is_multi_listing_page_normal_posting():
+    from src.validator import _is_multi_listing_page
+    text = "Acme Corp is looking for a Senior Engineer. Apply today."
+    assert _is_multi_listing_page(text, "https://boards.greenhouse.io/acme/jobs/123") is False
+
+
+# ---------------------------------------------------------------------------
+# _resolve_multi_listing — link extraction from mock page
+# ---------------------------------------------------------------------------
+
+def test_resolve_multi_listing_picks_best_match():
+    """_resolve_multi_listing should return the link that best matches title/company."""
+    html = """
+    <html><body>
+      <a href="https://jobs.lever.co/acme/abc-senior-engineer">Acme - Senior Engineer</a>
+      <a href="https://boards.greenhouse.io/other/jobs/999">Other Corp - Designer</a>
+    </body></html>
+    """
+    mock_resp = MagicMock()
+    mock_resp.text = html
+    mock_resp.raise_for_status.return_value = None
+
+    with patch("src.validator.requests.get", return_value=mock_resp):
+        from src.validator import _resolve_multi_listing
+        result = _resolve_multi_listing(
+            "https://hnhiring.com/october",
+            title="Senior Engineer",
+            company="Acme",
+        )
+
+    assert result == "https://jobs.lever.co/acme/abc-senior-engineer"
+
+
+def test_resolve_multi_listing_returns_none_when_no_good_match():
+    """Returns None when no link exceeds the minimum score threshold."""
+    html = "<html><body><a href='https://example.com/random'>Unrelated</a></body></html>"
+    mock_resp = MagicMock()
+    mock_resp.text = html
+    mock_resp.raise_for_status.return_value = None
+
+    with patch("src.validator.requests.get", return_value=mock_resp):
+        from src.validator import _resolve_multi_listing
+        result = _resolve_multi_listing(
+            "https://hnhiring.com/october",
+            title="Senior Engineer",
+            company="Acme",
+        )
+
+    assert result is None
+
+
+def test_resolve_multi_listing_resolves_relative_links():
+    """Relative links in multi-listing pages should be resolved to absolute URLs."""
+    html = """
+    <html><body>
+      <a href="/jobs/acme-senior-engineer-456">Acme - Senior Engineer</a>
+    </body></html>
+    """
+    mock_resp = MagicMock()
+    mock_resp.text = html
+    mock_resp.raise_for_status.return_value = None
+
+    with patch("src.validator.requests.get", return_value=mock_resp):
+        from src.validator import _resolve_multi_listing
+        result = _resolve_multi_listing(
+            "https://hnhiring.com/october",
+            title="Senior Engineer",
+            company="Acme",
+        )
+
+    # The relative path is resolved against the base URL; hnhiring.com is in
+    # _MULTI_LISTING_DOMAINS (not BLOCKED_DOMAINS) so resolved links on that
+    # host are still valid candidates if they score high enough.
+    assert result == "https://hnhiring.com/jobs/acme-senior-engineer-456"
+
+
+# ---------------------------------------------------------------------------
+# validate_job_links — hard-reject heuristic score
+# ---------------------------------------------------------------------------
+
+def test_validate_job_links_drops_hard_reject_score(sample_config):
+    """A heuristic score < 0 (closed/expired) must cause the URL to be dropped."""
+    jobs = [{"url": "https://example.com/job/1", "title": "AI Engineer", "company": "Acme"}]
+
+    with patch("src.validator._is_blocked_domain", return_value=False), \
+         patch("src.validator._is_safe_url", return_value=True), \
+         patch("src.validator._is_url_live", return_value=True), \
+         patch("src.validator.fetch_page_snippet", return_value="This position has been closed."), \
+         patch("src.validator._heuristic_score", return_value=-1), \
+         patch("src.validator._ask_parser") as mock_ai:
+        from src.validator import validate_job_links
+        result = validate_job_links(jobs, sample_config, MagicMock(), ["model"], max_jobs=10)
+
+    # Parser AI must NOT be consulted for hard-reject scores
+    mock_ai.assert_not_called()
+    assert result == []
+
+
+def test_validate_job_links_drops_blocked_domain(sample_config):
+    """URLs on the blocked-domain list are skipped before any HTTP request."""
+    jobs = [{"url": "https://jooble.org/jobs/1", "title": "Engineer", "company": "Corp"}]
+
+    with patch("src.validator._is_url_live") as mock_live:
+        from src.validator import validate_job_links
+        result = validate_job_links(jobs, sample_config, MagicMock(), ["model"], max_jobs=10)
+
+    mock_live.assert_not_called()
+    assert result == []
+
+
+def test_validate_job_links_drops_ssrf_url(sample_config):
+    """URLs that fail the SSRF safety check are dropped before any HTTP request."""
+    jobs = [{"url": "http://169.254.169.254/latest/meta-data/", "title": "Eng", "company": "Corp"}]
+
+    with patch("src.validator._is_blocked_domain", return_value=False), \
+         patch("src.validator._is_url_live") as mock_live:
+        from src.validator import validate_job_links
+        result = validate_job_links(jobs, sample_config, MagicMock(), ["model"], max_jobs=10)
+
+    mock_live.assert_not_called()
+    assert result == []
+

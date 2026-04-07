@@ -1,12 +1,43 @@
 """Job posting scraper — fetches and cleans raw page text from a URL."""
 
+import ipaddress
 import re
+import socket
+from urllib.parse import urlparse
+
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
 
 class ScraperError(Exception):
     """Error raised when scraping or parsing a job posting fails."""
     pass
+
+
+def _validate_url(url: str) -> None:
+    """Block URLs targeting private, loopback, or link-local addresses (SSRF)."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ScraperError(f"Unsupported URL scheme: {parsed.scheme!r}")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ScraperError(f"No hostname in URL: {url}")
+
+    port = parsed.port or (80 if parsed.scheme == "http" else 443)
+
+    # Resolve hostname to IP(s) and reject private/reserved addresses
+    try:
+        addrinfos = socket.getaddrinfo(hostname, port, proto=socket.IPPROTO_TCP)
+    except socket.gaierror as e:
+        raise ScraperError(f"Cannot resolve hostname {hostname!r}: {e}") from e
+
+    for family, _type, _proto, _canonname, sockaddr in addrinfos:
+        ip = ipaddress.ip_address(sockaddr[0])
+        if not ip.is_global:
+            raise ScraperError(
+                f"URL targets a private/reserved address ({ip}). "
+                "Only public URLs are allowed."
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +154,8 @@ def scrape_job(url: str) -> dict:
     Raises:
         ScraperError: if the page times out or yields no usable text.
     """
+    _validate_url(url)
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(

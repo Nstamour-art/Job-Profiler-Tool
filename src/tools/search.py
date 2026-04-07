@@ -40,12 +40,18 @@ def create_search_tool(
     jobs to Sheets as Seen, then returns up to max_jobs valid results.
     """
     from langchain_tavily import TavilySearch  # pylint: disable=import-outside-toplevel
+    from src.validator import BLOCKED_DOMAINS  # pylint: disable=import-outside-toplevel
 
     cfg = config or {}
     search_buffer = cfg.get("agent", {}).get("search_buffer", 5)
     fetch_count = max_jobs + search_buffer
 
-    tavily = TavilySearch(max_results=30, tavily_api_key=tavily_api_key)
+    tavily = TavilySearch(
+        max_results=30,
+        tavily_api_key=tavily_api_key,
+        time_range="week",
+        exclude_domains=list(BLOCKED_DOMAINS),
+    )
     system_prompt = SEARCH_SUBAGENT_SYSTEM_PROMPT.replace("{max_jobs}", str(fetch_count))
     search_model = parser_model if parser_model is not None else agent_model
 
