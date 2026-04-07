@@ -23,9 +23,11 @@ def _validate_url(url: str) -> None:
     if not hostname:
         raise ScraperError(f"No hostname in URL: {url}")
 
+    port = parsed.port or (80 if parsed.scheme == "http" else 443)
+
     # Resolve hostname to IP(s) and reject private/reserved addresses
     try:
-        addrinfos = socket.getaddrinfo(hostname, parsed.port or 443, proto=socket.IPPROTO_TCP)
+        addrinfos = socket.getaddrinfo(hostname, port, proto=socket.IPPROTO_TCP)
     except socket.gaierror as e:
         raise ScraperError(f"Cannot resolve hostname {hostname!r}: {e}") from e
 
