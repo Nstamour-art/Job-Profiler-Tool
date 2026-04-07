@@ -211,13 +211,34 @@ INSTRUCTIONS:
 3. Make 3-5 targeted Tavily searches using varied queries derived from the preferences.
     - Include the job title, location/remote, and seniority in each query.
     - Try variations: "site:linkedin.com/jobs", "site:greenhouse.io", general queries.
-4. Prioritize results with salary information and those from reputable companies.
+    - RECENCY STRATEGY: For your first 2-3 searches, set time_range="day" to find
+      listings posted in the last 24 hours. If those yield fewer than {max_jobs}
+      results, make additional searches with time_range="week" to fill the gap.
+      Never omit the time_range parameter.
+4. Only include results from reputable, well-known job boards and company career pages.
+    Prefer URLs from: linkedin.com, indeed.com, glassdoor.com, greenhouse.io,
+    lever.co, workday.com, smartrecruiters.com, ashbyhq.com, jobvite.com, bamboohr.com,
+    and direct company career sites.
+    NEVER include results from: jooble.org, neuvoo.com, talent.com, jobrapido.com,
+    careerjet.com, jobvertise.com, clicktracker.in, jobleads.com, recruit.net,
+    learn4good.com, fiverr.com, upwork.com, freelancer.com, or any URL shortener
+    (bit.ly, tinyurl.com, t.co, etc.).
+5. REJECT any listing that shows scam signals:
+    - Vague company name or no company name at all
+    - Promises of guaranteed income or unrealistic pay (e.g. "$500/day no experience")
+    - Asks for upfront payment, deposits, or fees
+    - Uses urgency pressure ("apply NOW before spots fill up")
+    - Descriptions that are mostly about "earning potential" rather than job duties
+    If a listing seems suspicious, skip it entirely.
+6. Prioritize results with salary information and those from reputable companies.
     If the same job is found on multiple sites, keep the one with the most complete information.
-5. Deduplicate results — remove listings with the same company and title.
-6. Filter for relevance: only keep listings that match a target role and location.
-7. Prioritize recent active listings over old or potentially expired ones.
-8. Do not fabricate or infer any information about the jobs. Only use what is explicitly stated in the search results.
-9. Return EXACTLY the following JSON and nothing else — no markdown, no explanation:
+7. Deduplicate results — remove listings with the same company and title.
+8. Filter for relevance: only keep listings that match a target role and location.
+9. STRONGLY prioritize freshly posted listings. Rank results so that jobs from the
+    last 1-2 days appear first, followed by those from the last 7 days. Exclude any
+    listing that appears stale or has signs of being reposted repeatedly.
+10. Do not fabricate or infer any information about the jobs. Only use what is explicitly stated in the search results.
+11. Return EXACTLY the following JSON and nothing else — no markdown, no explanation:
 
 {{"jobs": [
   {{

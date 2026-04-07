@@ -13,12 +13,76 @@ from __future__ import annotations
 
 import re
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
+
 import requests
 from bs4 import BeautifulSoup
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from src.providers import BaseProvider
+
+# ---------------------------------------------------------------------------
+# Blocked domains — known sources of fake, scam, or low-quality job listings.
+# Checked both at the Tavily search level (exclude_domains) and during link
+# validation as a second safety net.
+# ---------------------------------------------------------------------------
+BLOCKED_DOMAINS: set[str] = {
+    # Scam / fake-job aggregators
+    "jooble.org",
+    "neuvoo.com",
+    "talent.com",
+    "jobrapido.com",
+    "careerjet.com",
+    "jobvertise.com",
+    "us.jobrapido.com",
+    "clicktracker.in",
+    "jobleads.com",
+    "recruit.net",
+    "jobisland.com",
+    "learn4good.com",
+    "startwire.com",
+    "jobomas.com",
+    # Freelance / gig platforms (not traditional job postings)
+    "fiverr.com",
+    "upwork.com",
+    "freelancer.com",
+    "peopleperhour.com",
+    # URL shorteners & redirectors (can mask destinations)
+    "bit.ly",
+    "tinyurl.com",
+    "t.co",
+    "ow.ly",
+    "is.gd",
+}
+
+_FAKE_JOB_SIGNALS = re.compile(
+    r"pay\s*(?:per|for)\s*click|"
+    r"(?:wire|transfer)\s*(?:money|funds)|"
+    r"(?:upfront|advance)\s*(?:fee|payment|deposit)|"
+    r"(?:no\s*experience\s*(?:needed|required|necessary).*(?:\$|usd|salary))|"
+    r"(?:work\s*from\s*home.*\$\d{3,}\s*(?:/\s*day|per\s*day|daily))|"
+    r"(?:guaranteed\s*income)|"
+    r"(?:processing\s*(?:rebates|refunds|payments))",
+    re.IGNORECASE,
+)
+
+
+def _is_blocked_domain(url: str) -> bool:
+    """Return True if the URL's domain (or parent domain) is on the blocklist."""
+    try:
+        hostname = urlparse(url).hostname or ""
+    except Exception:  # pylint: disable=broad-exception-caught
+        return True  # unparseable URLs are suspect
+    hostname = hostname.lower().lstrip("www.")
+    # Check exact match and one-level parent (e.g. jobs.jooble.org → jooble.org)
+    parts = hostname.split(".")
+    for i in range(len(parts) - 1):
+        candidate = ".".join(parts[i:])
+        if candidate in BLOCKED_DOMAINS:
+            return True
+    return False
+
 
 _JOB_KEYWORDS = {
     "responsibilities",
@@ -118,6 +182,10 @@ def _heuristic_score(text: str, title: str, company: str, url: str = "") -> int:
     if url and any(pat in url.lower() for pat in _SEARCH_RESULT_PATTERNS):
         score -= 2
 
+    # Penalize pages that contain common fake-job / scam language
+    if _FAKE_JOB_SIGNALS.search(text_lower):
+        score -= 3
+
     return max(score, 0)
 
 
@@ -180,6 +248,10 @@ def validate_job_links(
 
         url = (job.get("url") or "").strip()
         if not url:
+            continue
+
+        # Block known fake / scam / low-quality domains
+        if _is_blocked_domain(url):
             continue
 
         if not _is_url_live(url):
