@@ -337,7 +337,8 @@ def _heuristic_score(text: str, title: str, company: str, url: str = "") -> int:
     if _FAKE_JOB_SIGNALS.search(text_lower):
         score -= 3
 
-    return max(score, -1)
+    # Reserve -1 exclusively for explicit closed/expired postings above.
+    return max(score, 0)
 
 
 def _ask_parser(
