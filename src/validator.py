@@ -67,6 +67,18 @@ _FAKE_JOB_SIGNALS = re.compile(
     re.IGNORECASE,
 )
 
+_CLOSED_POSTING_SIGNALS = re.compile(
+    r"no\s*longer\s*accept(?:ing|s)?\s*(?:applications|submissions|candidates)|"
+    r"this\s*(?:job|position|role|posting)\s*(?:has\s*been|is|was)\s*(?:closed|filled|expired|removed|archived)|"
+    r"(?:position|role|job)\s*(?:has\s*been|is|was)\s*(?:closed|filled|expired)|"
+    r"(?:application|applications)\s*(?:are|is)\s*(?:now\s*)?closed|"
+    r"this\s*(?:listing|posting)\s*(?:has\s*)?expired|"
+    r"no\s*longer\s*(?:available|listed|active|open)|"
+    r"(?:sorry|unfortunately).*(?:position|role|job).*(?:filled|closed|expired)|"
+    r"this\s*job\s*is\s*(?:no\s*longer\s*)?(?:available|active)",
+    re.IGNORECASE,
+)
+
 
 def _is_blocked_domain(url: str) -> bool:
     """Return True if the URL's domain (or parent domain) is on the blocklist."""
@@ -152,6 +164,8 @@ def fetch_page_snippet(url: str) -> str | None:
 def _heuristic_score(text: str, title: str, company: str, url: str = "") -> int:
     """Score a page 0–5 based on signals that it is a specific job posting.
 
+    Returns -1 for expired/closed postings (hard reject).
+
     Scoring:
       +2  company name present in text
       +1  any significant word (>3 chars) from the job title present
@@ -163,6 +177,10 @@ def _heuristic_score(text: str, title: str, company: str, url: str = "") -> int:
         return 0
 
     text_lower = text.lower()
+
+    # Hard reject: posting is explicitly closed / expired / filled
+    if _CLOSED_POSTING_SIGNALS.search(text_lower):
+        return -1
     score = 0
 
     if company and company.lower() in text_lower:
@@ -186,7 +204,7 @@ def _heuristic_score(text: str, title: str, company: str, url: str = "") -> int:
     if _FAKE_JOB_SIGNALS.search(text_lower):
         score -= 3
 
-    return max(score, 0)
+    return max(score, -1)
 
 
 def _ask_parser(
@@ -264,6 +282,10 @@ def validate_job_links(
         title = job.get("title", "")
         company = job.get("company", "")
         score = _heuristic_score(snippet, title, company, url=url)
+
+        # Hard reject: closed / expired posting (score == -1)
+        if score < 0:
+            continue
 
         if score >= _HEURISTIC_PASS_THRESHOLD:
             validated.append(job)
