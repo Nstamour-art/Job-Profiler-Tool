@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import ipaddress
+import socket
+from urllib.parse import urlparse
 from typing import TYPE_CHECKING
 
 from langchain_core.tools import tool as lc_tool
@@ -12,6 +15,42 @@ from src.prompts import JOB_SUMMARY_SYSTEM_PROMPT
 
 if TYPE_CHECKING:
     from src.providers import BaseProvider
+
+_ALLOWED_SCHEMES = {"http", "https"}
+
+
+def _validate_url(url: str) -> str | None:
+    """Return a cleaned URL, or an error message string if the URL is unsafe.
+
+    Checks:
+    - Non-empty after stripping whitespace
+    - Scheme must be http or https
+    - Resolved IP must not be loopback, private, or link-local (SSRF guard)
+
+    Returns ``None`` when the URL is safe to fetch, or a human-readable error
+    string that the tool can return directly to the caller.
+    """
+    url = url.strip()
+    if not url:
+        return "No URL provided."
+
+    parsed = urlparse(url)
+    if parsed.scheme not in _ALLOWED_SCHEMES:
+        return f"Invalid URL scheme '{parsed.scheme}': only http and https are allowed."
+
+    hostname = parsed.hostname
+    if not hostname:
+        return "Invalid URL: no hostname found."
+
+    try:
+        addr = ipaddress.ip_address(socket.gethostbyname(hostname))
+    except (socket.gaierror, ValueError):
+        return f"Could not resolve hostname '{hostname}'."
+
+    if addr.is_loopback or addr.is_private or addr.is_link_local:
+        return f"Access to '{hostname}' is not allowed."
+
+    return None
 
 
 def create_lookup_tool(
@@ -37,8 +76,10 @@ def create_lookup_tool(
         Returns:
             A 3-5 sentence plain-English summary, or an error string on failure.
         """
-        if not url:
-            return "No URL provided."
+        url = url.strip()
+        url_error = _validate_url(url)
+        if url_error is not None:
+            return url_error
 
         snippet = _fetch_snippet(url)
         if snippet is None:
