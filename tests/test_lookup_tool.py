@@ -105,7 +105,7 @@ def test_lookup_rejects_non_http_scheme(sample_config):
 
 
 def test_lookup_rejects_ftp_scheme(sample_config):
-    """FTP scheme must be rejected without fetching."""
+    """FTP URLs must be rejected without fetching (only http/https are allowed)."""
     with patch("src.tools.lookup._fetch_snippet") as mock_fetch:
         from src.tools.lookup import create_lookup_tool
         tool = create_lookup_tool(sample_config, MagicMock(), ["parser-model"])

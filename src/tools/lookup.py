@@ -30,7 +30,6 @@ def _validate_url(url: str) -> str | None:
     Returns ``None`` when the URL is safe to fetch, or a human-readable error
     string that the tool can return directly to the caller.
     """
-    url = url.strip()
     if not url:
         return "No URL provided."
 
