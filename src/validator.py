@@ -266,7 +266,7 @@ def _resolve_multi_listing(url: str, title: str, company: str) -> str | None:
         # Links to known job boards get a bonus
         try:
             link_host = urlparse(href).hostname or ""
-            link_host = link_host.lower().lstrip("www.")
+            link_host = link_host.lower().removeprefix("www.")
             parts = link_host.split(".")
             for i in range(len(parts) - 1):
                 if ".".join(parts[i:]) in _JOB_LINK_DOMAINS:
