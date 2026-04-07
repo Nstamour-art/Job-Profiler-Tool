@@ -33,7 +33,7 @@ def _validate_url(url: str) -> None:
 
     for family, _type, _proto, _canonname, sockaddr in addrinfos:
         ip = ipaddress.ip_address(sockaddr[0])
-        if not ip.is_global or ip.is_multicast or ip.is_unspecified:
+        if not ip.is_global:
             raise ScraperError(
                 f"URL targets a private/reserved address ({ip}). "
                 "Only public URLs are allowed."

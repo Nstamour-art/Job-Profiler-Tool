@@ -347,8 +347,9 @@ def test_resolve_multi_listing_resolves_relative_links():
             company="Acme",
         )
 
-    # The relative path is resolved; hnhiring.com is not in BLOCKED_DOMAINS so
-    # it will be returned if it scores high enough (company + title words).
+    # The relative path is resolved against the base URL; hnhiring.com is in
+    # _MULTI_LISTING_DOMAINS (not BLOCKED_DOMAINS) so resolved links on that
+    # host are still valid candidates if they score high enough.
     assert result == "https://hnhiring.com/jobs/acme-senior-engineer-456"
 
 

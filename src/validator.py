@@ -362,7 +362,7 @@ def _heuristic_score(text: str, title: str, company: str, url: str = "") -> int:
     if _FAKE_JOB_SIGNALS.search(text_lower):
         score -= 3
 
-    # Reserve -1 exclusively for explicit closed/expired postings above.
+    # Clamp to 0 — only closed/expired postings (handled above) return -1.
     return max(score, 0)
 
 
@@ -420,7 +420,7 @@ def _is_safe_url(url: str) -> bool:
         addrinfos = socket.getaddrinfo(hostname, port, proto=socket.IPPROTO_TCP)
         for _family, _type, _proto, _canonname, sockaddr in addrinfos:
             ip = ipaddress.ip_address(sockaddr[0])
-            if not ip.is_global or ip.is_multicast or ip.is_unspecified:
+            if not ip.is_global:
                 return False
     except Exception:  # pylint: disable=broad-exception-caught
         return False
