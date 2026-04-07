@@ -222,6 +222,13 @@ def _fetch_page_links(url: str) -> list[tuple[str, str]]:
 
 def _is_multi_listing_page(text: str, url: str) -> bool:
     """Return True if the page appears to be a multi-listing / aggregator page."""
+    parsed = urlparse(url)
+    hostname = parsed.netloc.lower()
+    if hostname.startswith("www."):
+        hostname = hostname[4:]
+
+    if hostname in BLOCKED_DOMAINS:
+        return True
     if _MULTI_LISTING_SIGNALS.search(text):
         return True
     # Pages with very dense job keyword counts relative to length
