@@ -11,9 +11,11 @@ Pipeline per URL:
 
 from __future__ import annotations
 
+import ipaddress
 import re
+import socket
 from typing import TYPE_CHECKING
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -199,7 +201,12 @@ _JOB_LINK_DOMAINS = {
 
 
 def _fetch_page_links(url: str) -> list[tuple[str, str]]:
-    """Fetch a page and return a list of (href, anchor_text) tuples."""
+    """Fetch a page and return a list of (href, anchor_text) tuples.
+
+    Relative and protocol-relative hrefs are resolved against ``url`` so that
+    links like ``/jobs/123`` or ``//boards.greenhouse.io/…`` are not silently
+    dropped.
+    """
     try:
         resp = requests.get(
             url,
@@ -212,6 +219,8 @@ def _fetch_page_links(url: str) -> list[tuple[str, str]]:
         links = []
         for a_tag in soup.find_all("a", href=True):
             href = str(a_tag["href"]).strip()
+            # Resolve relative / protocol-relative URLs against the page URL
+            href = urljoin(url, href)
             if href.startswith(("http://", "https://")):
                 anchor = a_tag.get_text(separator=" ", strip=True)
                 links.append((href, anchor))
@@ -220,15 +229,24 @@ def _fetch_page_links(url: str) -> list[tuple[str, str]]:
         return []
 
 
+# Domains that are always multi-listing / aggregator pages
+_MULTI_LISTING_DOMAINS = {
+    "hnhiring.com",
+    "news.ycombinator.com",   # "Who's Hiring" threads
+    "whoishiring.io",
+}
+
+
 def _is_multi_listing_page(text: str, url: str) -> bool:
     """Return True if the page appears to be a multi-listing / aggregator page."""
-    parsed = urlparse(url)
-    hostname = parsed.netloc.lower()
-    if hostname.startswith("www."):
-        hostname = hostname[4:]
-
-    if hostname in BLOCKED_DOMAINS:
-        return True
+    # Known aggregator hostnames are always multi-listing pages
+    try:
+        hostname = urlparse(url).hostname or ""
+        hostname = hostname.lower().removeprefix("www.")
+        if hostname in _MULTI_LISTING_DOMAINS:
+            return True
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
     if _MULTI_LISTING_SIGNALS.search(text):
         return True
     # Pages with very dense job keyword counts relative to length
@@ -384,6 +402,31 @@ def _ask_parser(
         return True  # include on failure — user can discard manually
 
 
+def _is_safe_url(url: str) -> bool:
+    """Return True only if the URL targets a publicly routable address (SSRF guard).
+
+    Rejects URLs whose scheme is not http/https, whose hostname does not resolve,
+    or that resolve to any non-globally-routable IP (private, loopback, link-local,
+    multicast, unspecified, reserved, etc.).
+    """
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        port = parsed.port or (80 if parsed.scheme == "http" else 443)
+        addrinfos = socket.getaddrinfo(hostname, port, proto=socket.IPPROTO_TCP)
+        for _family, _type, _proto, _canonname, sockaddr in addrinfos:
+            ip = ipaddress.ip_address(sockaddr[0])
+            if not ip.is_global or ip.is_multicast or ip.is_unspecified:
+                return False
+    except Exception:  # pylint: disable=broad-exception-caught
+        return False
+    return True
+
+
 def validate_job_links(
     jobs: list[dict],
     config: dict,
@@ -416,6 +459,10 @@ def validate_job_links(
         if _is_blocked_domain(url):
             continue
 
+        # SSRF guard: only request publicly routable addresses
+        if not _is_safe_url(url):
+            continue
+
         if not _is_url_live(url):
             continue
 
@@ -430,7 +477,7 @@ def validate_job_links(
         # the specific job URL and re-validate with the resolved link.
         if _is_multi_listing_page(snippet, url):
             resolved = _resolve_multi_listing(url, title, company)
-            if resolved and not _is_blocked_domain(resolved) and _is_url_live(resolved):
+            if resolved and not _is_blocked_domain(resolved) and _is_safe_url(resolved) and _is_url_live(resolved):
                 resolved_snippet = fetch_page_snippet(resolved)
                 if resolved_snippet is not None:
                     resolved_score = _heuristic_score(

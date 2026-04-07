@@ -211,10 +211,8 @@ INSTRUCTIONS:
 3. Make 3-5 targeted Tavily searches using varied queries derived from the preferences.
     - Include the job title, location/remote, and seniority in each query.
     - Try variations: "site:linkedin.com/jobs", "site:greenhouse.io", general queries.
-    - RECENCY STRATEGY: For your first 2-3 searches, set time_range="day" to find
-      listings posted in the last 24 hours. If those yield fewer than {max_jobs}
-      results, make additional searches with time_range="week" to fill the gap.
-      Never omit the time_range parameter.
+    - All searches are scoped to the past 7 days by the search tool configuration.
+      Prioritize results that appear most recently posted within that window.
 4. Only include results from reputable, well-known job boards and company career pages.
     Prefer URLs from: linkedin.com, indeed.com, glassdoor.com, greenhouse.io,
     lever.co, workday.com, smartrecruiters.com, ashbyhq.com, jobvite.com, bamboohr.com,
