@@ -171,6 +171,120 @@ def fetch_page_snippet(url: str) -> str | None:
         return None
 
 
+# ---------------------------------------------------------------------------
+# Multi-listing page resolver — detects pages that aggregate many jobs
+# (e.g. hnhiring.com, "Who's Hiring" threads) and extracts the specific
+# job URL that matches the given title / company.
+# ---------------------------------------------------------------------------
+
+_MULTI_LISTING_SIGNALS = re.compile(
+    r"\d+\s*jobs?\s*found|"
+    r"who(?:'s|\s+is)\s*hiring|"
+    r"hiring\s*thread|"
+    r"showing\s*\d+\s*results",
+    re.IGNORECASE,
+)
+
+# Domains that typically host individual job postings (worth following links to)
+_JOB_LINK_DOMAINS = {
+    "greenhouse.io", "lever.co", "ashbyhq.com", "jobvite.com",
+    "bamboohr.com", "smartrecruiters.com", "workday.com",
+    "linkedin.com", "indeed.com", "wellfound.com", "angel.co",
+    "jobs.lever.co", "boards.greenhouse.io", "jobs.ashbyhq.com",
+    "myworkdayjobs.com",
+}
+
+
+def _fetch_page_links(url: str) -> list[tuple[str, str]]:
+    """Fetch a page and return a list of (href, anchor_text) tuples."""
+    try:
+        resp = requests.get(
+            url,
+            timeout=_GET_TIMEOUT,
+            allow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        links = []
+        for a_tag in soup.find_all("a", href=True):
+            href = str(a_tag["href"]).strip()
+            if href.startswith(("http://", "https://")):
+                anchor = a_tag.get_text(separator=" ", strip=True)
+                links.append((href, anchor))
+        return links
+    except requests.RequestException:
+        return []
+
+
+def _is_multi_listing_page(text: str, url: str) -> bool:
+    """Return True if the page appears to be a multi-listing / aggregator page."""
+    if _MULTI_LISTING_SIGNALS.search(text):
+        return True
+    # Pages with very dense job keyword counts relative to length
+    # (many "apply" / "hiring" mentions) are likely aggregators
+    text_lower = text.lower()
+    apply_count = text_lower.count("apply") + text_lower.count("hiring")
+    if apply_count >= 8 and len(text) > 2000:
+        return True
+    return False
+
+
+def _resolve_multi_listing(url: str, title: str, company: str) -> str | None:
+    """Given a multi-listing page URL, try to find the specific job link.
+
+    Scores each link on the page by how well it matches the expected
+    title and company, and whether it points to a known job board.
+    Returns the best matching URL, or None if no good match is found.
+    """
+    links = _fetch_page_links(url)
+    if not links:
+        return None
+
+    title_words = {w.lower() for w in re.split(r"\W+", title) if len(w) > 3}
+    company_lower = company.lower().strip()
+
+    best_url = None
+    best_score = 0
+
+    for href, anchor in links:
+        # Skip links back to the same page or to blocked domains
+        if _is_blocked_domain(href):
+            continue
+
+        link_score = 0
+        combined = (anchor + " " + href).lower()
+
+        # Company name in the anchor text or URL
+        if company_lower and company_lower in combined:
+            link_score += 3
+
+        # Title words in the anchor text
+        matched_title_words = sum(1 for w in title_words if w in combined)
+        link_score += matched_title_words
+
+        # Links to known job boards get a bonus
+        try:
+            link_host = urlparse(href).hostname or ""
+            link_host = link_host.lower().lstrip("www.")
+            parts = link_host.split(".")
+            for i in range(len(parts) - 1):
+                if ".".join(parts[i:]) in _JOB_LINK_DOMAINS:
+                    link_score += 2
+                    break
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+
+        if link_score > best_score:
+            best_score = link_score
+            best_url = href
+
+    # Require a minimum score to avoid random links
+    if best_score >= 3:
+        return best_url
+    return None
+
+
 def _heuristic_score(text: str, title: str, company: str, url: str = "") -> int:
     """Score a page 0–5 based on signals that it is a specific job posting.
 
@@ -269,9 +383,12 @@ def validate_job_links(
     """Validate job URLs and return up to max_jobs that are confirmed job postings.
 
     For each job dict (must have 'url', 'title', 'company'):
+      0. Block known scam domains
       1. HEAD check — skip dead URLs
       2. Lightweight text fetch — compute heuristic score
-      3. score >= _HEURISTIC_PASS_THRESHOLD → include
+      3. Multi-listing detection — if the page aggregates many jobs, try to
+         resolve the specific job URL and re-validate it
+      4. score >= _HEURISTIC_PASS_THRESHOLD → include
          score <  _HEURISTIC_DROP_THRESHOLD → exclude
          otherwise → ask parser AI
     """
@@ -297,6 +414,32 @@ def validate_job_links(
 
         title = job.get("title", "")
         company = job.get("company", "")
+
+        # Check if this is a multi-listing page; if so, try to resolve
+        # the specific job URL and re-validate with the resolved link.
+        if _is_multi_listing_page(snippet, url):
+            resolved = _resolve_multi_listing(url, title, company)
+            if resolved and not _is_blocked_domain(resolved) and _is_url_live(resolved):
+                resolved_snippet = fetch_page_snippet(resolved)
+                if resolved_snippet is not None:
+                    resolved_score = _heuristic_score(
+                        resolved_snippet, title, company, url=resolved,
+                    )
+                    if resolved_score >= _HEURISTIC_PASS_THRESHOLD:
+                        job = {**job, "url": resolved}
+                        validated.append(job)
+                        continue
+                    if resolved_score >= _HEURISTIC_DROP_THRESHOLD:
+                        if _ask_parser(
+                            resolved_snippet, title, company,
+                            provider, config, parser_models,
+                        ):
+                            job = {**job, "url": resolved}
+                            validated.append(job)
+                            continue
+            # Could not resolve a specific job from the multi-listing page — skip
+            continue
+
         score = _heuristic_score(snippet, title, company, url=url)
 
         # Hard reject: closed / expired posting (score == -1)

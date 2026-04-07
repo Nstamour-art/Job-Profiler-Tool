@@ -226,7 +226,14 @@ INSTRUCTIONS:
     (bit.ly, tinyurl.com, t.co, etc.).
     Every URL MUST point to a specific job posting page — never a homepage, search
     results page, or generic landing page. If the URL has no job-specific path
-    (e.g. just \"https://www.adzuna.ca\"), discard it.
+    (e.g. just "https://www.adzuna.ca"), discard it.
+    MULTI-LISTING PAGES (e.g. hnhiring.com, "Who's Hiring" threads): These are
+    allowed as sources. When a search result comes from a multi-listing page, look
+    at the snippet to identify the specific company and role, then use the direct
+    apply link from the snippet (e.g. a lever.co or greenhouse.io URL) as the job
+    URL if available. If no direct link is visible, you may still use the
+    multi-listing page URL — the system will try to resolve the specific job link
+    automatically.
 5. REJECT any listing that shows scam signals:
     - Vague company name or no company name at all
     - Promises of guaranteed income or unrealistic pay (e.g. "$500/day no experience")
