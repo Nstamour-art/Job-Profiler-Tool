@@ -221,8 +221,12 @@ INSTRUCTIONS:
     and direct company career sites.
     NEVER include results from: jooble.org, neuvoo.com, talent.com, jobrapido.com,
     careerjet.com, jobvertise.com, clicktracker.in, jobleads.com, recruit.net,
-    learn4good.com, fiverr.com, upwork.com, freelancer.com, or any URL shortener
+    learn4good.com, adzuna.com, adzuna.ca, ziprecruiter.com, simplyhired.com,
+    snagajob.com, fiverr.com, upwork.com, freelancer.com, or any URL shortener
     (bit.ly, tinyurl.com, t.co, etc.).
+    Every URL MUST point to a specific job posting page — never a homepage, search
+    results page, or generic landing page. If the URL has no job-specific path
+    (e.g. just \"https://www.adzuna.ca\"), discard it.
 5. REJECT any listing that shows scam signals:
     - Vague company name or no company name at all
     - Promises of guaranteed income or unrealistic pay (e.g. "$500/day no experience")

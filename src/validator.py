@@ -43,6 +43,16 @@ BLOCKED_DOMAINS: set[str] = {
     "learn4good.com",
     "startwire.com",
     "jobomas.com",
+    # Low-quality aggregators that surface stale or generic listings
+    "adzuna.com",
+    "adzuna.ca",
+    "adzuna.co.uk",
+    "ziprecruiter.com",
+    "simplyhired.com",
+    "snagajob.com",
+    "jora.com",
+    "jobcase.com",
+    "getwork.com",
     # Freelance / gig platforms (not traditional job postings)
     "fiverr.com",
     "upwork.com",
@@ -199,6 +209,12 @@ def _heuristic_score(text: str, title: str, company: str, url: str = "") -> int:
 
     if url and any(pat in url.lower() for pat in _SEARCH_RESULT_PATTERNS):
         score -= 2
+
+    # Penalize bare homepage / root URLs with no job-specific path
+    if url:
+        path = urlparse(url).path.rstrip("/")
+        if not path or path == "":
+            score -= 3
 
     # Penalize pages that contain common fake-job / scam language
     if _FAKE_JOB_SIGNALS.search(text_lower):
