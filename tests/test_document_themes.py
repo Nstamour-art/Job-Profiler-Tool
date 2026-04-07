@@ -73,7 +73,7 @@ def test_build_cover_letter_classic_creates_file(tmp_path, sample_personal):
         closing="Thank you.",
     )
     out = str(tmp_path / "cover.docx")
-    build_cover_letter(cover, sample_personal, "Acme", "Engineer", out, theme=CLASSIC)
+    build_cover_letter(cover, sample_personal, "Acme", out, theme=CLASSIC)
     assert os.path.exists(out)
 
 

@@ -42,6 +42,7 @@ _SEARCH_RESULT_PATTERNS = (
     "q=",
     "/jobs?",
     "/careers/search",
+    "/jobs/q-",  # Dice search URL slug format (e.g. /jobs/q-engineer-l-Remote-jobs)
 )
 
 
@@ -53,7 +54,7 @@ def _is_url_live(url: str) -> bool:
     """Return True if the URL appears reachable.
 
     405 and 501 indicate HEAD is not supported by the server — the URL is
-    still live and will be checked via GET in _fetch_snippet.
+    still live and will be checked via GET in fetch_page_snippet.
     """
     try:
         resp = requests.head(
@@ -67,7 +68,7 @@ def _is_url_live(url: str) -> bool:
         return False
 
 
-def _fetch_snippet(url: str) -> str | None:
+def fetch_page_snippet(url: str) -> str | None:
     """Fetch and return up to _VALIDATION_MAX_CHARS of cleaned page text, or None on failure."""
     try:
         resp = requests.get(
@@ -184,7 +185,7 @@ def validate_job_links(
         if not _is_url_live(url):
             continue
 
-        snippet = _fetch_snippet(url)
+        snippet = fetch_page_snippet(url)
         if snippet is None:
             continue
 

@@ -38,7 +38,7 @@ def test_is_url_live_returns_false_on_request_exception():
 
 
 # ---------------------------------------------------------------------------
-# _fetch_snippet
+# fetch_page_snippet
 # ---------------------------------------------------------------------------
 
 def test_fetch_snippet_returns_cleaned_text():
@@ -46,8 +46,8 @@ def test_fetch_snippet_returns_cleaned_text():
     mock_resp.text = "<html><body><p>Apply now. Responsibilities include building AI systems.</p></body></html>"
     mock_resp.raise_for_status.return_value = None
     with patch("src.validator.requests.get", return_value=mock_resp):
-        from src.validator import _fetch_snippet
-        result = _fetch_snippet("https://example.com/job/1")
+        from src.validator import fetch_page_snippet
+        result = fetch_page_snippet("https://example.com/job/1")
     assert "Apply now" in result
     assert "<html>" not in result
 
@@ -55,8 +55,8 @@ def test_fetch_snippet_returns_cleaned_text():
 def test_fetch_snippet_returns_none_on_failure():
     import requests as req
     with patch("src.validator.requests.get", side_effect=req.RequestException("conn error")):
-        from src.validator import _fetch_snippet
-        assert _fetch_snippet("https://example.com/job/1") is None
+        from src.validator import fetch_page_snippet
+        assert fetch_page_snippet("https://example.com/job/1") is None
 
 
 # ---------------------------------------------------------------------------
@@ -100,6 +100,21 @@ def test_heuristic_score_penalises_search_result_urls():
     assert score_search <= 3  # search result URL causes penalty
 
 
+def test_heuristic_score_penalises_dice_search_urls():
+    """Dice encodes searches as /jobs/q-keyword-l-location-jobs — must be penalised."""
+    from src.validator import _heuristic_score
+    text = (
+        "Acme Corp is hiring a Senior AI Engineer. "
+        "Responsibilities include building ML pipelines. "
+        "Qualifications: 5+ years Python. Apply now. " * 20
+    )
+    score_posting = _heuristic_score(text, title="Senior AI Engineer", company="Acme Corp",
+                                     url="https://www.dice.com/jobs/detail/12345-senior-ai-engineer")
+    score_search = _heuristic_score(text, title="Senior AI Engineer", company="Acme Corp",
+                                    url="https://www.dice.com/jobs/q-senior+ai+engineer-l-Remote-jobs")
+    assert score_search < score_posting
+
+
 # ---------------------------------------------------------------------------
 # validate_job_links
 # ---------------------------------------------------------------------------
@@ -114,7 +129,7 @@ def test_validate_job_links_drops_dead_urls(sample_config):
         return "dead" not in url
 
     with patch("src.validator._is_url_live", side_effect=fake_is_live), \
-         patch("src.validator._fetch_snippet", return_value="Acme is hiring AI Engineer. Responsibilities qualifications apply." * 10), \
+         patch("src.validator.fetch_page_snippet", return_value="Acme is hiring AI Engineer. Responsibilities qualifications apply." * 10), \
          patch("src.validator._heuristic_score", return_value=4):
         from src.validator import validate_job_links
         result = validate_job_links(jobs, sample_config, MagicMock(), ["model"], max_jobs=10)
@@ -127,7 +142,7 @@ def test_validate_job_links_caps_at_max_jobs(sample_config):
     jobs = [{"url": f"https://example.com/job/{i}", "title": "Eng", "company": "Corp"} for i in range(10)]
 
     with patch("src.validator._is_url_live", return_value=True), \
-         patch("src.validator._fetch_snippet", return_value="Corp Eng responsibilities qualifications apply apply apply" * 10), \
+         patch("src.validator.fetch_page_snippet", return_value="Corp Eng responsibilities qualifications apply apply apply" * 10), \
          patch("src.validator._heuristic_score", return_value=4):
         from src.validator import validate_job_links
         result = validate_job_links(jobs, sample_config, MagicMock(), ["model"], max_jobs=3)
@@ -139,7 +154,7 @@ def test_validate_job_links_uses_ai_for_uncertain_score(sample_config):
     jobs = [{"url": "https://example.com/job/1", "title": "AI Engineer", "company": "Acme"}]
 
     with patch("src.validator._is_url_live", return_value=True), \
-         patch("src.validator._fetch_snippet", return_value="Some page content."), \
+         patch("src.validator.fetch_page_snippet", return_value="Some page content."), \
          patch("src.validator._heuristic_score", return_value=1), \
          patch("src.validator._ask_parser", return_value=True) as mock_ai:
         from src.validator import validate_job_links
@@ -153,7 +168,7 @@ def test_validate_job_links_drops_if_ai_says_no(sample_config):
     jobs = [{"url": "https://example.com/job/1", "title": "AI Engineer", "company": "Acme"}]
 
     with patch("src.validator._is_url_live", return_value=True), \
-         patch("src.validator._fetch_snippet", return_value="Some page content."), \
+         patch("src.validator.fetch_page_snippet", return_value="Some page content."), \
          patch("src.validator._heuristic_score", return_value=1), \
          patch("src.validator._ask_parser", return_value=False):
         from src.validator import validate_job_links
@@ -163,11 +178,11 @@ def test_validate_job_links_drops_if_ai_says_no(sample_config):
 
 
 def test_validate_job_links_skips_url_when_snippet_is_none(sample_config):
-    """When _fetch_snippet returns None the URL is skipped, not included."""
+    """When fetch_page_snippet returns None the URL is skipped, not included."""
     jobs = [{"url": "https://example.com/job/1", "title": "AI Engineer", "company": "Acme"}]
 
     with patch("src.validator._is_url_live", return_value=True), \
-         patch("src.validator._fetch_snippet", return_value=None):
+         patch("src.validator.fetch_page_snippet", return_value=None):
         from src.validator import validate_job_links
         result = validate_job_links(jobs, sample_config, MagicMock(), ["model"], max_jobs=10)
 
