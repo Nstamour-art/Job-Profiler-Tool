@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from langchain_core.tools import tool as lc_tool
 
-from src.validator import _fetch_snippet
+from src.validator import fetch_page_snippet
 from src.llm import _call_with_retry
 from src.prompts import JOB_SUMMARY_SYSTEM_PROMPT
 
@@ -80,7 +80,7 @@ def create_lookup_tool(
         if url_error is not None:
             return url_error
 
-        snippet = _fetch_snippet(url)
+        snippet = fetch_page_snippet(url)
         if snippet is None:
             return (
                 f"Could not fetch details for {url} — "
