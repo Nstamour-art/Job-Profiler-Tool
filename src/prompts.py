@@ -219,11 +219,10 @@ INSTRUCTIONS:
     Prefer URLs from: linkedin.com, indeed.com, glassdoor.com, greenhouse.io,
     lever.co, workday.com, smartrecruiters.com, ashbyhq.com, jobvite.com, bamboohr.com,
     and direct company career sites.
-    NEVER include results from: jooble.org, neuvoo.com, talent.com, jobrapido.com,
-    careerjet.com, jobvertise.com, clicktracker.in, jobleads.com, recruit.net,
-    learn4good.com, adzuna.com, adzuna.ca, ziprecruiter.com, simplyhired.com,
-    snagajob.com, fiverr.com, upwork.com, freelancer.com, or any URL shortener
-    (bit.ly, tinyurl.com, t.co, etc.).
+    NEVER include results from low-quality job aggregators, freelance/gig marketplaces,
+    scammy intermediaries, or any URL shortener. Avoid reposting-heavy sites and rely
+    on the system's blocked-domain policy rather than a hard-coded domain list here.
+    Examples of URL shorteners include bit.ly, tinyurl.com, and t.co.
     Every URL MUST point to a specific job posting page — never a homepage, search
     results page, or generic landing page. If the URL has no job-specific path
     (e.g. just "https://www.adzuna.ca"), discard it.
