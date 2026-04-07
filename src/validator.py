@@ -96,7 +96,10 @@ def _is_blocked_domain(url: str) -> bool:
         hostname = urlparse(url).hostname or ""
     except Exception:  # pylint: disable=broad-exception-caught
         return True  # unparseable URLs are suspect
-    hostname = hostname.lower().lstrip("www.")
+    hostname = hostname.lower().removeprefix("www.")
+    # Single-label hostnames (e.g. 'localhost') are treated as blocked
+    if "." not in hostname:
+        return True
     # Check exact match and one-level parent (e.g. jobs.jooble.org → jooble.org)
     parts = hostname.split(".")
     for i in range(len(parts) - 1):
