@@ -107,6 +107,22 @@ def _try_selectors(page, selectors: list[str]):
     return None
 
 
+def _wait_for_content(page, selectors: list[str], timeout: int = 15000):
+    """Wait for any content selector to appear in the DOM (SPA support).
+
+    Some job boards (e.g. Workday) reach ``networkidle`` before their
+    JavaScript framework has rendered the actual content. This helper
+    polls for the first matching selector to appear, giving SPAs time
+    to finish rendering.
+    """
+    # Build a combined CSS selector: "sel1, sel2, sel3, …"
+    combined = ", ".join(selectors)
+    try:
+        page.wait_for_selector(combined, state="attached", timeout=timeout)
+    except PlaywrightTimeoutError:
+        pass  # fall through — caller will try body text
+
+
 def _dismiss_modals(page) -> None:
     """Attempt to dismiss common login/cookie modals without crashing."""
     try:
@@ -183,6 +199,11 @@ def scrape_job(url: str) -> dict:
 
             # Try targeted content selectors; fall back to full body text
             el = _try_selectors(page, _CONTENT_SELECTORS)
+            if not el:
+                # SPA pages (e.g. Workday) may still be rendering content;
+                # wait for any known selector to appear before retrying.
+                _wait_for_content(page, _CONTENT_SELECTORS)
+                el = _try_selectors(page, _CONTENT_SELECTORS)
             if el:
                 raw_text = el.inner_text()
             else:
